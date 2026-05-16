@@ -18,6 +18,7 @@ from .api.tasks import router as tasks_router
 from .api.dashboard import router as dashboard_router
 from .api.reviews import router as reviews_router
 from .api.notifications import router as notifications_router
+from .api.hospital_ratings import router as hospital_ratings_router
 
 
 @asynccontextmanager
@@ -49,6 +50,7 @@ app.include_router(tasks_router)
 app.include_router(dashboard_router)
 app.include_router(reviews_router)
 app.include_router(notifications_router)
+app.include_router(hospital_ratings_router)
 
 
 @app.get("/api/health")

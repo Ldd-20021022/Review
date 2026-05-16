@@ -19,6 +19,7 @@ class Assessment(Base):
     department_id: Mapped[Optional[int]] = mapped_column(ForeignKey("departments.id"), nullable=True)
     rating_cycle: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     submitter_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    set_id: Mapped[Optional[int]] = mapped_column(ForeignKey("standard_sets.id"), nullable=True)
     total_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True, default=None)
     status: Mapped[str] = mapped_column(String(20), default="draft")
     submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
