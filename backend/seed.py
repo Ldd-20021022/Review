@@ -12,7 +12,7 @@ def seed():
     # ── Clean slate ──
     for t in [Notification, ReviewRecord, TaskComment, RectifyTask, SnapshotItem, Snapshot,
               AssessmentItem, Assessment, StdRequirement, StdIndicator, StdCategory,
-              Department, UserTenant, User, Tenant]:
+              StandardSet, Department, UserTenant, User, Tenant]:
         try:
             db.query(t).delete()
         except Exception:
@@ -63,6 +63,13 @@ def seed():
     db.flush()
     db.add(UserTenant(user_id=admin.id, tenant_id=t.id, role="admin"))
     print(f"Admin: {admin.id} - {admin.name} (phone: admin / admin123)")
+
+    # ── Standard Sets ──
+    hg_set = StandardSet(name="三甲医院评审", type="hospital_grade")
+    emr_set = StandardSet(name="电子病历评级", type="emr")
+    db.add_all([hg_set, emr_set])
+    db.flush()
+    print(f"StandardSets: {hg_set.id} - {hg_set.name}, {emr_set.id} - {emr_set.name}")
 
     # ── Rating Categories (PJ.md sample data) ──
     cats = {}
