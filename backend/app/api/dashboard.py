@@ -8,7 +8,7 @@ from ..database import get_db
 from ..models.assessment import Assessment, AssessmentItem
 from ..models.department import Department
 from ..models.standard import StdCategory, StdIndicator
-from ..middleware.tenant import get_current_tenant_id
+from ..middleware.tenant import get_current_tenant_id, get_current_user_tenant
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -18,8 +18,9 @@ def director_dashboard(
     set_type: Optional[str] = Query(None),
     tenant_id: int = Depends(get_current_tenant_id),
     db: Session = Depends(get_db),
+    ut = Depends(get_current_user_tenant),
 ):
-    """院长综合仪表盘 — 全院各科室评级状态一览。可选 set_type 过滤标准套件。"""
+    """综合仪表盘 — 院长/管理员看全院，科室负责人只看自己科室。"""
     q = db.query(Assessment).filter(Assessment.tenant_id == tenant_id)
     if set_type:
         from ..models.standard_set import StandardSet
@@ -28,9 +29,14 @@ def director_dashboard(
             q = q.filter(Assessment.set_id == hg_set.id)
     assessments = q.order_by(Assessment.created_at.desc()).all()
 
-    # Get all departments for this tenant
+    # 科室负责人只看自己科室
+    is_manager = ut.role in ('admin', 'director')
+    if ut.dept_id:
+        q = q.filter(Assessment.department_id == ut.dept_id)
+
     depts = db.query(Department).filter(Department.tenant_id == tenant_id).all()
-    dept_map = {d.id: d.name for d in depts}
+    if not is_manager and ut.dept_id:
+        depts = [d for d in depts if d.id == ut.dept_id]
 
     # Group assessments by department (latest per dept)
     dept_latest = {}
@@ -43,7 +49,6 @@ def director_dashboard(
     for d in depts:
         latest = dept_latest.get(d.id)
         if latest:
-            # Count non-compliant items
             non_compliant = sum(1 for it in latest.items if it.is_compliant is False)
             dept_stats.append({
                 "id": d.id,
@@ -71,7 +76,7 @@ def director_dashboard(
     approved = sum(1 for s in dept_stats if s["status"] == "approved")
     rejected = sum(1 for s in dept_stats if s["status"] == "rejected")
     pending = sum(1 for s in dept_stats if s["status"] in ("submitted", "revising"))
-    not_submitted = sum(1 for s in dept_stats if s["status"] == "not_submitted" or s["status"] == "draft")
+    not_submitted = sum(1 for s in dept_stats if s["status"] in ("not_submitted", "draft"))
 
     scores = [s["score"] for s in dept_stats if s["score"] is not None]
     avg_score = round(sum(scores) / len(scores), 1) if scores else 0
@@ -84,6 +89,7 @@ def director_dashboard(
         "not_submitted": not_submitted,
         "average_score": avg_score,
         "departments": dept_stats,
+        "is_manager": is_manager,
     }
 
 

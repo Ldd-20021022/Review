@@ -1,17 +1,23 @@
-import { defineComponent, ref, onMounted } from 'vue'
+import { defineComponent, ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from '/src/shim/element-plus.js'
+import { useAuthStore } from '../../stores/auth.js'
 import { getDashboard, approveRating, rejectRating } from '../../api/hospital-rating.js'
 
 export default defineComponent({
   name: 'HRDashboard',
   setup() {
     const router = useRouter()
+    const auth = useAuthStore()
     const dashboard = ref(null)
     const loading = ref(false)
     const rejectDialog = ref(false)
     const rejectForm = ref({ assessment_id: null, dept_name: '', score: 0, feedback: '' })
     const rejecting = ref(false)
+
+    const isManager = computed(() =>
+      auth.user?.role === 'admin' || auth.user?.role === 'director'
+    )
 
     async function fetch() {
       loading.value = true
@@ -81,18 +87,18 @@ export default defineComponent({
     onMounted(fetch)
 
     return {
-      dashboard, loading, rejectDialog, rejectForm, rejecting,
+      dashboard, loading, rejectDialog, rejectForm, rejecting, isManager,
       goReport, openReject, handleReject, handleApprove, statusMap,
     }
   },
   template: `
 <div v-loading="loading">
-  <h2 style="margin-bottom:20px">🏥 全院三甲评级综合仪表盘</h2>
+  <h2 style="margin-bottom:20px">{{ isManager ? '🏥 全院三甲评级综合仪表盘' : '📊 本科室评级概览' }}</h2>
 
   <el-row :gutter="16" style="margin-bottom:20px">
     <el-col :span="6">
       <el-card shadow="hover" style="text-align:center;border-left:3px solid #409eff">
-        <p style="color:#909399;font-size:13px;margin:0 0 8px">📊 全院均分</p>
+        <p style="color:#909399;font-size:13px;margin:0 0 8px">📊 {{ isManager ? '全院均分' : '科室得分' }}</p>
         <h1 style="margin:0;color:#409eff;font-size:28px">{{ dashboard?.average_score ?? '-' }}</h1>
       </el-card>
     </el-col>
@@ -116,7 +122,7 @@ export default defineComponent({
     </el-col>
   </el-row>
 
-  <el-card>
+  <el-card v-if="isManager">
     <template #header>
       <span style="font-weight:bold">科室评级状态一览</span>
       <span style="color:#909399;font-size:12px;margin-left:8px">
@@ -164,7 +170,15 @@ export default defineComponent({
     </el-table>
   </el-card>
 
-  <el-dialog v-model="rejectDialog" title="❌ 退回科室评级" width="500px">
+  <el-card v-else-if="dashboard?.departments?.length > 0">
+    <template #header><span style="font-weight:bold">本科室指标概况</span></template>
+    <p>当前评级周期：{{ dashboard.departments[0].rating_cycle || '暂无' }}</p>
+    <p>达标项：{{ (dashboard.departments[0].total_items || 0) - (dashboard.departments[0].non_compliant_count || 0) }} / {{ dashboard.departments[0].total_items || 0 }}</p>
+    <el-button v-if="dashboard.departments[0].assessment_id" size="small" type="primary" style="margin-top:8px"
+      @click="goReport(dashboard.departments[0].assessment_id)">查看详细报告 →</el-button>
+  </el-card>
+
+  <el-dialog v-if="isManager" v-model="rejectDialog" title="❌ 退回科室评级" width="500px">
     <div style="margin-bottom:16px">
       <p><strong>科室：</strong>{{ rejectForm.dept_name }}</p>
       <p><strong>当前得分：</strong>

@@ -2,11 +2,16 @@ import { defineComponent, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth.js'
 
-const menuItems = [
-  { path: '/hospital-rating/dashboard', title: '📊 综合仪表盘', roles: ['admin', 'director', 'expert', 'leader'] },
+const mainMenus = [
+  { path: '/hospital-rating/dashboard', title: '📊 综合仪表盘', roles: ['admin', 'director', 'expert', 'leader', 'dept_head'] },
   { path: '/hospital-rating/form', title: '📋 数据填报', roles: ['admin', 'director', 'expert', 'dept_head'] },
   { path: '/hospital-rating/reports', title: '📄 评级报告', roles: ['admin', 'director', 'expert', 'leader', 'dept_head'] },
+]
+
+const adminMenus = [
   { path: '/hospital-rating/standards', title: '📐 标准库管理', roles: ['admin'] },
+  { path: '/admin/departments', title: '🏥 科室管理', roles: ['admin'] },
+  { path: '/admin/users', title: '👥 用户管理', roles: ['admin'] },
 ]
 
 const roleLabels = {
@@ -27,8 +32,14 @@ export default defineComponent({
     auth.fetchMe()
 
     const visibleMenus = computed(() =>
-      menuItems.filter(m => m.roles.includes(auth.user?.role))
+      mainMenus.filter(m => m.roles.includes(auth.user?.role))
     )
+
+    const visibleAdminMenus = computed(() =>
+      adminMenus.filter(m => m.roles.includes(auth.user?.role))
+    )
+
+    const showAdmin = computed(() => visibleAdminMenus.value.length > 0)
 
     function handleSelect(path) {
       if (path) router.push(path)
@@ -39,7 +50,7 @@ export default defineComponent({
       router.push('/login')
     }
 
-    return { route, auth, visibleMenus, handleSelect, handleLogout, roleLabels }
+    return { route, auth, visibleMenus, visibleAdminMenus, showAdmin, handleSelect, handleLogout, roleLabels }
   },
   template: `
 <el-container style="min-height:100vh">
@@ -57,6 +68,13 @@ export default defineComponent({
       <el-menu-item v-for="m in visibleMenus" :key="m.path" :index="m.path">
         <span>{{ m.title }}</span>
       </el-menu-item>
+
+      <el-sub-menu v-if="showAdmin" index="admin">
+        <template #title>⚙️ 系统管理</template>
+        <el-menu-item v-for="m in visibleAdminMenus" :key="m.path" :index="m.path">
+          {{ m.title }}
+        </el-menu-item>
+      </el-sub-menu>
     </el-menu>
   </el-aside>
   <el-container>
