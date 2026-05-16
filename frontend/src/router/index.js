@@ -13,6 +13,11 @@ import SnapshotDetail from '../views/snapshots/Detail.js'
 import TaskList from '../views/tasks/List.js'
 import TaskDetail from '../views/tasks/Detail.js'
 import ReportsIndex from '../views/reports/Index.js'
+import HRLayout from '../views/hospital-rating/Layout.js'
+import HRDashboard from '../views/hospital-rating/Dashboard.js'
+import HRRatingForm from '../views/hospital-rating/RatingForm.js'
+import HRReportView from '../views/hospital-rating/ReportView.js'
+import HRStandardManage from '../views/hospital-rating/StandardManage.js'
 
 const R = (roles) => ({ roles })
 const ALL = R(['admin', 'director', 'expert', 'dept_head', 'leader'])
@@ -26,7 +31,7 @@ const routes = [
     path: '/',
     component: Layout,
     children: [
-      { path: '', redirect: '/dashboard' },
+      { path: '', redirect: '/hospital-rating/dashboard' },
       { path: 'dashboard', name: 'Dashboard', component: Dashboard, meta: { title: '综合仪表盘', ...ALL } },
       { path: 'assessments', name: 'Assessments', component: AssessmentList, meta: { title: '评级填报', ...STAFF } },
       { path: 'assessments/:id', name: 'AssessmentDetail', component: AssessmentDetail, meta: { title: '填报详情', ...STAFF } },
@@ -39,6 +44,17 @@ const routes = [
       { path: 'admin/users', name: 'AdminUsers', component: AdminUsers, meta: { title: '用户管理', ...ADMIN } },
       { path: 'admin/standards', name: 'AdminStandards', component: Standards, meta: { title: '标准库管理', ...ADMIN } },
       { path: 'admin/departments', name: 'AdminDepartments', component: AdminDepartments, meta: { title: '科室管理', ...ADMIN } },
+      {
+        path: '/hospital-rating',
+        component: HRLayout,
+        children: [
+          { path: '', redirect: '/hospital-rating/dashboard' },
+          { path: 'dashboard', name: 'HRDashboard', component: HRDashboard, meta: { title: '综合仪表盘', ...ALL } },
+          { path: 'form', name: 'HRRatingForm', component: HRRatingForm, meta: { title: '数据填报', ...STAFF } },
+          { path: 'reports', name: 'HRReports', component: HRReportView, meta: { title: '评级报告', ...ALL } },
+          { path: 'standards', name: 'HRStandards', component: HRStandardManage, meta: { title: '标准库管理', ...ADMIN } },
+        ],
+      },
     ],
   },
 ]
