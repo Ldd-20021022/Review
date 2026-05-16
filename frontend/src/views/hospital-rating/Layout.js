@@ -1,4 +1,4 @@
-import { defineComponent, computed, onMounted, onUnmounted } from 'vue'
+import { defineComponent, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth.js'
 

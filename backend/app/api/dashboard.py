@@ -15,16 +15,18 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/director")
 def director_dashboard(
+    set_type: Optional[str] = Query(None),
     tenant_id: int = Depends(get_current_tenant_id),
     db: Session = Depends(get_db),
 ):
-    """PJ.md 院长综合仪表盘 — 全院各科室评级状态一览。"""
-    assessments = (
-        db.query(Assessment)
-        .filter(Assessment.tenant_id == tenant_id)
-        .order_by(Assessment.created_at.desc())
-        .all()
-    )
+    """院长综合仪表盘 — 全院各科室评级状态一览。可选 set_type 过滤标准套件。"""
+    q = db.query(Assessment).filter(Assessment.tenant_id == tenant_id)
+    if set_type:
+        from ..models.standard_set import StandardSet
+        hg_set = db.query(StandardSet).filter(StandardSet.type == set_type).first()
+        if hg_set:
+            q = q.filter(Assessment.set_id == hg_set.id)
+    assessments = q.order_by(Assessment.created_at.desc()).all()
 
     # Get all departments for this tenant
     depts = db.query(Department).filter(Department.tenant_id == tenant_id).all()

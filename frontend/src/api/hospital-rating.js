@@ -1,7 +1,7 @@
 import { get, post } from './client.js'
 
 export function getDashboard() {
-  return get('/api/hospital-ratings/dashboard')
+  return get('/api/dashboard/director', { set_type: 'hospital_grade' })
 }
 
 export function submitRating(data) {
@@ -17,11 +17,11 @@ export function getReport(id) {
 }
 
 export function approveRating(id) {
-  return post(`/api/hospital-ratings/${id}/approve`)
+  return post(`/api/assessments/${id}/approve`)
 }
 
 export function rejectRating(id, feedback) {
-  return post(`/api/hospital-ratings/${id}/reject`, { feedback })
+  return post(`/api/assessments/${id}/reject`, { feedback })
 }
 
 export function getStandards() {
