@@ -1,0 +1,189 @@
+import { defineComponent, ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from '/src/shim/element-plus.js'
+import { getDashboard, approveRating, rejectRating } from '../../api/hospital-rating.js'
+
+export default defineComponent({
+  name: 'HRDashboard',
+  setup() {
+    const router = useRouter()
+    const dashboard = ref(null)
+    const loading = ref(false)
+    const rejectDialog = ref(false)
+    const rejectForm = ref({ assessment_id: null, dept_name: '', score: 0, feedback: '' })
+    const rejecting = ref(false)
+
+    async function fetch() {
+      loading.value = true
+      try {
+        dashboard.value = await getDashboard()
+      } finally {
+        loading.value = false
+      }
+    }
+
+    function goReport(id) {
+      if (id) router.push(`/hospital-rating/reports?assessment=${id}`)
+    }
+
+    function openReject(row) {
+      rejectForm.value = {
+        assessment_id: row.assessment_id,
+        dept_name: row.name,
+        score: row.score || 0,
+        feedback: '',
+      }
+      rejectDialog.value = true
+    }
+
+    async function handleReject() {
+      if (!rejectForm.value.feedback.trim()) {
+        ElMessage.warning('请填写退回意见')
+        return
+      }
+      rejecting.value = true
+      try {
+        await rejectRating(rejectForm.value.assessment_id, rejectForm.value.feedback)
+        ElMessage.success('已退回并通知科室负责人')
+        rejectDialog.value = false
+        await fetch()
+      } catch (e) {
+        ElMessage.error('操作失败: ' + e.message)
+      } finally {
+        rejecting.value = false
+      }
+    }
+
+    async function handleApprove(row) {
+      await ElMessageBox.confirm(
+        `确认通过【${row.name}】的评级吗？`,
+        '确认通过',
+        { type: 'success' }
+      )
+      try {
+        await approveRating(row.assessment_id)
+        ElMessage.success('已通过')
+        await fetch()
+      } catch (e) {
+        ElMessage.error('操作失败: ' + e.message)
+      }
+    }
+
+    const statusMap = {
+      approved: '✅ 已通过',
+      rejected: '❌ 已退回',
+      submitted: '📝 待审核',
+      revising: '🔄 整改中',
+      draft: '📋 草稿',
+      not_submitted: '📋 未提交',
+    }
+
+    onMounted(fetch)
+
+    return {
+      dashboard, loading, rejectDialog, rejectForm, rejecting,
+      goReport, openReject, handleReject, handleApprove, statusMap,
+    }
+  },
+  template: `
+<div v-loading="loading">
+  <h2 style="margin-bottom:20px">🏥 全院三甲评级综合仪表盘</h2>
+
+  <el-row :gutter="16" style="margin-bottom:20px">
+    <el-col :span="6">
+      <el-card shadow="hover" style="text-align:center;border-left:3px solid #409eff">
+        <p style="color:#909399;font-size:13px;margin:0 0 8px">📊 全院均分</p>
+        <h1 style="margin:0;color:#409eff;font-size:28px">{{ dashboard?.average_score ?? '-' }}</h1>
+      </el-card>
+    </el-col>
+    <el-col :span="6">
+      <el-card shadow="hover" style="text-align:center;border-left:3px solid #67c23a">
+        <p style="color:#909399;font-size:13px;margin:0 0 8px">✅ 已达标</p>
+        <h1 style="margin:0;color:#67c23a;font-size:28px">{{ dashboard?.approved ?? 0 }} 个</h1>
+      </el-card>
+    </el-col>
+    <el-col :span="6">
+      <el-card shadow="hover" style="text-align:center;border-left:3px solid #f56c6c">
+        <p style="color:#909399;font-size:13px;margin:0 0 8px">❌ 未达标</p>
+        <h1 style="margin:0;color:#f56c6c;font-size:28px">{{ dashboard?.rejected ?? 0 }} 个</h1>
+      </el-card>
+    </el-col>
+    <el-col :span="6">
+      <el-card shadow="hover" style="text-align:center;border-left:3px solid #e6a23c">
+        <p style="color:#909399;font-size:13px;margin:0 0 8px">📝 待提交/审核</p>
+        <h1 style="margin:0;color:#e6a23c;font-size:28px">{{ (dashboard?.pending ?? 0) + (dashboard?.not_submitted ?? 0) }} 个</h1>
+      </el-card>
+    </el-col>
+  </el-row>
+
+  <el-card>
+    <template #header>
+      <span style="font-weight:bold">科室评级状态一览</span>
+      <span style="color:#909399;font-size:12px;margin-left:8px">
+        共 {{ dashboard?.total_departments ?? 0 }} 个科室
+      </span>
+    </template>
+
+    <el-table :data="dashboard?.departments ?? []" stripe>
+      <el-table-column label="科室" width="120">
+        <template #default="{ row }">🏥 {{ row.name }}</template>
+      </el-table-column>
+      <el-table-column label="评级周期" width="110">
+        <template #default="{ row }">{{ row.rating_cycle || '-' }}</template>
+      </el-table-column>
+      <el-table-column label="总分" width="90" align="center">
+        <template #default="{ row }">
+          <span v-if="row.score != null" style="font-weight:bold;font-size:16px"
+            :style="{color: row.score >= 60 ? '#67c23a' : '#f56c6c'}">{{ row.score }}</span>
+          <span v-else style="color:#c0c4cc">-</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="状态" width="120" align="center">
+        <template #default="{ row }">
+          <el-tag :type="row.status === 'approved' ? 'success' : row.status === 'rejected' ? 'danger' : row.status === 'submitted' ? 'warning' : 'info'" size="small">
+            {{ statusMap[row.status] || row.status }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="未达标项" width="100" align="center">
+        <template #default="{ row }">
+          <span v-if="row.non_compliant_count > 0" style="color:#f56c6c;font-weight:bold">{{ row.non_compliant_count }} 项</span>
+          <span v-else style="color:#67c23a">-</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="220">
+        <template #default="{ row }">
+          <div v-if="row.assessment_id" style="display:flex;gap:6px">
+            <el-button size="small" @click="goReport(row.assessment_id)">查看报告</el-button>
+            <el-button v-if="row.status === 'submitted'" size="small" type="success" @click="handleApprove(row)">通过</el-button>
+            <el-button v-if="row.status === 'submitted'" size="small" type="danger" @click="openReject(row)">⭐ 退回</el-button>
+          </div>
+          <span v-else style="color:#c0c4cc;font-size:12px">暂未提交</span>
+        </template>
+      </el-table-column>
+    </el-table>
+  </el-card>
+
+  <el-dialog v-model="rejectDialog" title="❌ 退回科室评级" width="500px">
+    <div style="margin-bottom:16px">
+      <p><strong>科室：</strong>{{ rejectForm.dept_name }}</p>
+      <p><strong>当前得分：</strong>
+        <span :style="{color: rejectForm.score >= 60 ? '#e6a23c' : '#f56c6c',fontWeight:'bold'}">
+          {{ rejectForm.score }} 分
+        </span>
+      </p>
+    </div>
+    <el-form label-width="90px">
+      <el-form-item label="退回意见" required>
+        <el-input v-model="rejectForm.feedback" type="textarea" :rows="4"
+          placeholder="请填写具体的整改意见，科室负责人将收到通知..." />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="rejectDialog = false">取消</el-button>
+      <el-button type="danger" @click="handleReject" :loading="rejecting">确认退回 ❌</el-button>
+    </template>
+  </el-dialog>
+</div>
+`,
+})
