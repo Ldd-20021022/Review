@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EMR 评级自评系统</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  </style>
+
+  <!-- IIFE globals: all libs share one Vue instance -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/vue-router@4/dist/vue-router.global.prod.js"></script>
+  <script src="https://unpkg.com/element-plus"></script>
+
+  <!-- Import map: map ESM names to local shims that re-export globals -->
+  <script type="importmap">
+  {
+    "imports": {
+      "vue": "/src/shim/vue.js",
+      "vue-router": "/src/shim/vue-router.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <div style="display:flex;justify-content:center;align-items:center;min-height:100vh">
+      <span>加载中...</span>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
