@@ -26,6 +26,16 @@ export default defineComponent({
     const textDialog = ref(false)
     const textInput = ref('')
     const textImporting = ref(false)
+    const searchText = ref('')
+
+    function filterIndicators(indicators) {
+      if (!searchText.value) return indicators || []
+      const q = searchText.value.toLowerCase()
+      return (indicators || []).filter(ind =>
+        (ind.name || '').toLowerCase().includes(q) ||
+        (ind.code || '').toLowerCase().includes(q)
+      )
+    }
 
     const typeOptions = [
       { value: 'numeric_less_equal', label: '≤ 标准值 (越小越好)' },
@@ -154,20 +164,19 @@ export default defineComponent({
 
     return {
       categories, loading, uploading, catDialog, catForm, indDialog, indForm,
-      textDialog, textInput, textImporting, typeOptions,
+      textDialog, textInput, textImporting, typeOptions, searchText,
       openCatDialog, handleCreateCat, openIndDialog, handleCreateInd,
-      handleFileChange, openTextImport, handleTextImport,
+      handleFileChange, openTextImport, handleTextImport, filterIndicators,
     }
   },
   template: `
 <div v-loading="loading">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
     <h2>📐 三甲评审标准库</h2>
-    <div style="display:flex;gap:8px">
-      <label style="cursor:pointer">
-        <el-button type="primary" :loading="uploading">
-          📤 Excel 导入
-        </el-button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <el-input v-model="searchText" placeholder="搜索指标名称/编码..." size="small" style="width:200px" clearable />
+      <label style="cursor:pointer;margin:0">
+        <el-button type="primary" :loading="uploading">📤 Excel 导入</el-button>
         <input type="file" accept=".xlsx,.xls" style="display:none" @change="handleFileChange" />
       </label>
       <el-button @click="openTextImport">📝 文本/Word 导入</el-button>
@@ -196,13 +205,13 @@ export default defineComponent({
           <span>
             <span style="font-weight:600">{{ cat.name }}</span>
             <span style="color:#909399;font-size:12px;margin-left:8px">
-              {{ cat.indicators?.length || 0 }} 项 · 权重 {{ cat.weight }}%
+              {{ filterIndicators(cat.indicators).length }}/{{ cat.indicators?.length || 0 }} 项 · 权重 {{ cat.weight }}%
             </span>
           </span>
           <el-button size="small" @click.stop="openIndDialog(cat.id)">➕ 添加指标</el-button>
         </div>
       </template>
-      <el-table :data="cat.indicators || []" stripe size="small">
+      <el-table :data="filterIndicators(cat.indicators)" stripe size="small">
         <el-table-column prop="code" label="编号" width="80" />
         <el-table-column prop="name" label="指标名称" min-width="200" />
         <el-table-column prop="standard_value" label="标准值" width="120" align="center" />

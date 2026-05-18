@@ -43,6 +43,27 @@ export default defineComponent({
       router.push(`/hospital-rating/form?edit=${id}`)
     }
 
+    function exportCSV() {
+      if (!report.value || !report.value.items) return
+      const rows = [['分类', '指标名称', '标准值', '实际值', '结果', '得分']]
+      for (const it of report.value.items) {
+        rows.push([
+          it.category_name || '', it.name || '',
+          (it.standard_value || '') + (it.unit || ''),
+          it.actual_value || '',
+          it.is_compliant ? '达标' : '未达标',
+          it.score ?? '',
+        ])
+      }
+      const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n')
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = (report.value.name || 'report') + '.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+
     onMounted(async () => {
       await fetchList()
       const aid = route.query.assessment
@@ -56,15 +77,18 @@ export default defineComponent({
     }
 
     return { report, list, loading, selectedId, resubmitting,
-      fetchReport, handleResubmit, goEdit, statusMap }
+      fetchReport, handleResubmit, goEdit, exportCSV, statusMap }
   },
   template: `
 <div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
     <h2>📄 评级报告</h2>
-    <div v-if="report && (report.status === 'rejected' || report.status === 'draft')" style="display:flex;gap:8px">
-      <el-button @click="goEdit(report.assessment_id)">✏️ 修改数据</el-button>
-      <el-button type="primary" @click="handleResubmit" :loading="resubmitting">📤 提交审核</el-button>
+    <div v-if="report" style="display:flex;gap:8px">
+      <el-button v-if="report.status === 'rejected' || report.status === 'draft'"
+        @click="goEdit(report.assessment_id)">✏️ 修改数据</el-button>
+      <el-button v-if="report.status === 'rejected' || report.status === 'draft'"
+        type="primary" @click="handleResubmit" :loading="resubmitting">📤 提交审核</el-button>
+      <el-button @click="exportCSV">📥 导出 CSV</el-button>
     </div>
   </div>
 
