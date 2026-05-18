@@ -19,6 +19,22 @@ export default defineComponent({
       auth.user?.role === 'admin' || auth.user?.role === 'director'
     )
 
+    function exportDashboardCSV() {
+      const depts = dashboard.value?.departments || []
+      const rows = [['科室', '评级周期', '总分', '状态', '未达标项数']]
+      for (const d of depts) {
+        rows.push([d.name, d.rating_cycle || '-', d.score ?? '-',
+          statusMap[d.status] || d.status, d.non_compliant_count || 0])
+      }
+      const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n')
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = '全院评级数据.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+
     async function fetch() {
       loading.value = true
       try {
@@ -88,12 +104,13 @@ export default defineComponent({
 
     return {
       dashboard, loading, rejectDialog, rejectForm, rejecting, isManager,
-      goReport, openReject, handleReject, handleApprove, statusMap,
+      goReport, openReject, handleReject, handleApprove, statusMap, exportDashboardCSV,
     }
   },
   template: `
 <div v-loading="loading">
   <h2 style="margin-bottom:20px">{{ isManager ? '🏥 全院三甲评级综合仪表盘' : '📊 本科室评级概览' }}</h2>
+  <el-button v-if="isManager" @click="exportDashboardCSV" style="float:right;margin-top:-44px" size="small">📥 导出 CSV</el-button>
 
   <el-row :gutter="16" style="margin-bottom:20px">
     <el-col :span="6">

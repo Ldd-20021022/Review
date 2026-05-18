@@ -30,9 +30,14 @@ export default defineComponent({
 
     auth.fetchMe()
 
+    const collapsed = ref(window.innerWidth < 768)
     const notifCount = ref(0)
     const notifs = ref([])
     let timer = null
+
+    function toggleSidebar() { collapsed.value = !collapsed.value }
+    function onResize() { collapsed.value = window.innerWidth < 768 }
+    window.addEventListener('resize', onResize)
 
     async function fetchNotifs() {
       try { notifCount.value = (await unreadCount()).count || 0 } catch (_) {}
@@ -82,18 +87,25 @@ export default defineComponent({
 
     return {
       route, auth, notifCount, notifs, visibleMenus, visibleAdminMenus, showAdmin,
+      collapsed, toggleSidebar,
       handleSelect, handleLogout, roleLabels,
       fetchNotifList, handleMarkRead, markAllRead,
     }
   },
   template: `
 <el-container style="min-height:100vh">
-  <el-aside width="200px" style="background:#1e293b">
-    <div style="padding:16px 12px;font-weight:700;font-size:15px;color:#fff;border-bottom:1px solid #334155">
+  <!-- Mobile overlay -->
+  <div v-if="!collapsed" @click="collapsed = true"
+    style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:999"
+    :style="{display: window.innerWidth < 768 ? 'block' : 'none'}" />
+
+  <el-aside :width="collapsed ? '0px' : '200px'" style="background:#1e293b;transition:width .3s;overflow:hidden;z-index:1000"
+    :style="{position: window.innerWidth < 768 ? 'fixed' : 'relative', height: window.innerWidth < 768 ? '100vh' : 'auto'}">
+    <div style="padding:16px 12px;font-weight:700;font-size:15px;color:#fff;border-bottom:1px solid #334155;white-space:nowrap">
       🏥 三甲评级系统
     </div>
     <el-menu :default-active="route.path" background-color="#1e293b" text-color="#94a3b8"
-      active-text-color="#60a5fa" @select="handleSelect">
+      active-text-color="#60a5fa" @select="handleSelect" :collapse="collapsed">
       <el-menu-item v-for="m in visibleMenus" :key="m.path" :index="m.path">
         <span>{{ m.title }}</span>
       </el-menu-item>
@@ -106,7 +118,9 @@ export default defineComponent({
     </el-menu>
   </el-aside>
   <el-container>
-    <el-header style="background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:flex-end;height:52px;padding:0 24px;gap:16px">
+    <el-header style="background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 16px;gap:12px">
+      <el-button text @click="toggleSidebar" style="font-size:20px">☰</el-button>
+      <div style="display:flex;align-items:center;gap:12px">
       <!-- Notification bell -->
       <el-popover trigger="click" placement="bottom-end" width="320px" @show="fetchNotifList">
         <template #reference>
