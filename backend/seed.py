@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from app.database import SessionLocal, engine, Base
 from app.models import *
 from app.utils.security import hash_password
-from app.data.standards_2022 import STANDARDS
+from app.data.standards_2025 import STANDARDS_2025 as STANDARDS
 from decimal import Decimal
 from collections import OrderedDict
 
@@ -68,7 +68,7 @@ def seed():
     print(f"Admin: {admin.id} - {admin.name} (phone: admin / admin123)")
 
     # ── Standard Sets ──
-    hg_set = StandardSet(name="三甲医院评审", type="hospital_grade")
+    hg_set = StandardSet(name="三甲医院评审(2025年版)", type="hospital_grade")
     emr_set = StandardSet(name="电子病历评级", type="emr")
     db.add_all([hg_set, emr_set])
     db.flush()
@@ -108,7 +108,7 @@ def seed():
     def _make_assessment(name, dept_key, submitter_key, status, values):
         """Helper: values = {code: actual_value}"""
         a = Assessment(
-            tenant_id=t.id, name=f"{depts[dept_key].name} — 2025年度三甲评级",
+            tenant_id=t.id, name=f"{depts[dept_key].name} — 2025年度三甲评级(2025版)",
             target_level=1, department_id=depts[dept_key].id, rating_cycle="2025年度",
             submitter_id=dept_heads[submitter_key].id, status=status, set_id=hg_set.id,
         )
