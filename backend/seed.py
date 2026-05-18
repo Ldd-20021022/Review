@@ -72,14 +72,19 @@ def seed():
     db.flush()
     print(f"StandardSets: {hg_set.id} - {hg_set.name}, {emr_set.id} - {emr_set.name}")
 
-    # ── Rating Categories (PJ.md sample data) ──
+    # ── Rating Categories (三甲评审标准 2022版) ──
     cats = {}
     cat_data = [
-        ("医疗质量与安全", "MED", 30.00, 1),
-        ("护理管理", "NUR", 20.00, 2),
-        ("院感防控", "INF", 15.00, 3),
-        ("药事管理", "PHA", 15.00, 4),
-        ("行政后勤", "ADM", 20.00, 5),
+        ("医疗服务能力", "SER", 15.00, 1),
+        ("医疗质量与安全", "QUA", 20.00, 2),
+        ("护理管理", "NUR", 12.00, 3),
+        ("院感防控", "INF", 10.00, 4),
+        ("药事管理", "PHA", 10.00, 5),
+        ("患者安全", "SAF", 10.00, 6),
+        ("医院管理", "MGT", 8.00, 7),
+        ("信息管理", "INF", 5.00, 8),
+        ("后勤保障", "LOG", 5.00, 9),
+        ("行风建设", "ETH", 5.00, 10),
     ]
     for name, code, weight, sort in cat_data:
         c = StdCategory(name=name, code=code, weight=Decimal(str(weight)), sort_order=sort)
@@ -88,33 +93,100 @@ def seed():
         cats[name] = c
         print(f"  Category: {c.id} - {name} ({weight}%)")
 
-    # ── Rating Indicators (PJ.md sample data) ──
+    # ── Rating Indicators (60+ realistic items) ──
     inds = {}
-    indicator_data = [
-        ("医疗质量与安全", "IND01", "住院患者死亡率", "≤0.8%", "%", "numeric_less_equal", 40.00),
-        ("医疗质量与安全", "IND02", "手术并发症发生率", "≤2%", "%", "numeric_less_equal", 30.00),
-        ("医疗质量与安全", "IND03", "I类切口感染率", "≤0.5%", "%", "numeric_less_equal", 30.00),
-        ("护理管理", "IND04", "护理不良事件上报率", "≥95%", "%", "numeric_greater_equal", 50.00),
-        ("护理管理", "IND05", "基础护理合格率", "≥90%", "%", "numeric_greater_equal", 50.00),
-        ("院感防控", "IND06", "手卫生依从率", "≥80%", "%", "numeric_greater_equal", 100.00),
-        ("药事管理", "IND07", "处方合格率", "≥90%", "%", "numeric_greater_equal", 100.00),
-        ("行政后勤", "IND08", "消防演练完成率", "=100%", "%", "yesno", 100.00),
-    ]
-    for cat_name, code, name, sv, unit, itype, weight in indicator_data:
-        ind = StdIndicator(
-            category_id=cats[cat_name].id,
-            code=code,
-            name=name,
-            standard_value=sv,
-            unit=unit,
-            indicator_type=itype,
-            weight=Decimal(str(weight)),
-            sort_order=0,
-        )
-        db.add(ind)
-        db.flush()
-        inds[name] = ind
-        print(f"    Indicator: {ind.id} - {name} ({sv} / type:{itype})")
+    _i = 1
+    def _add(cat, code, name, sv, unit, itype, weight):
+        nonlocal _i
+        ind = StdIndicator(category_id=cats[cat].id, code=f"HR{_i:03d}", name=name,
+                           standard_value=sv, unit=unit, indicator_type=itype,
+                           weight=Decimal(str(weight)), sort_order=0)
+        db.add(ind); db.flush()
+        inds[name] = ind; _i += 1
+
+    # 医疗服务能力
+    _add("医疗服务能力","","年门急诊人次","≥50万人次","人次","numeric_greater_equal",20)
+    _add("医疗服务能力","","年出院人次数","≥2万人次","人次","numeric_greater_equal",15)
+    _add("医疗服务能力","","年手术人次数","≥5000例","例","numeric_greater_equal",15)
+    _add("医疗服务能力","","急危重症抢救成功率","≥85%","%","numeric_greater_equal",20)
+    _add("医疗服务能力","","平均住院日","≤8天","天","numeric_less_equal",15)
+    _add("医疗服务能力","","床位使用率","≥93%","%","numeric_greater_equal",15)
+
+    # 医疗质量与安全
+    _add("医疗质量与安全","","住院患者死亡率","≤0.8%","%","numeric_less_equal",10)
+    _add("医疗质量与安全","","手术并发症发生率","≤2%","%","numeric_less_equal",8)
+    _add("医疗质量与安全","","I类切口感染率","≤0.5%","%","numeric_less_equal",8)
+    _add("医疗质量与安全","","非计划再手术率","≤0.5%","%","numeric_less_equal",8)
+    _add("医疗质量与安全","","临床路径入径率","≥50%","%","numeric_greater_equal",5)
+    _add("医疗质量与安全","","临床路径完成率","≥70%","%","numeric_greater_equal",5)
+    _add("医疗质量与安全","","疑难病例讨论率","100%","%","numeric_equal",5)
+    _add("医疗质量与安全","","死亡病例讨论率","100%","%","numeric_equal",5)
+    _add("医疗质量与安全","","危急值报告及时率","≥95%","%","numeric_greater_equal",5)
+    _add("医疗质量与安全","","会诊及时率","≥90%","%","numeric_greater_equal",5)
+    _add("医疗质量与安全","","三级查房落实率","100%","%","numeric_equal",5)
+    _add("医疗质量与安全","","手术安全核查执行率","100%","%","numeric_equal",5)
+
+    # 护理管理
+    _add("护理管理","","护理不良事件上报率","≥95%","%","numeric_greater_equal",15)
+    _add("护理管理","","基础护理合格率","≥90%","%","numeric_greater_equal",15)
+    _add("护理管理","","危重患者护理合格率","≥90%","%","numeric_greater_equal",15)
+    _add("护理管理","","护理文书书写合格率","≥95%","%","numeric_greater_equal",10)
+    _add("护理管理","","急救物品完好率","100%","%","numeric_equal",15)
+    _add("护理管理","","护理人员培训覆盖率","100%","%","numeric_equal",10)
+    _add("护理管理","","患者跌倒/坠床发生率","≤0.1%","%","numeric_less_equal",10)
+    _add("护理管理","","压疮发生率","≤0.1%","%","numeric_less_equal",10)
+
+    # 院感防控
+    _add("院感防控","","手卫生依从率","≥80%","%","numeric_greater_equal",20)
+    _add("院感防控","","医院感染发生率","≤10%","%","numeric_less_equal",20)
+    _add("院感防控","","多重耐药菌检出率","≤30%","%","numeric_less_equal",15)
+    _add("院感防控","","抗菌药物治疗前送检率","≥50%","%","numeric_greater_equal",15)
+    _add("院感防控","","医疗废物规范处置率","100%","%","numeric_equal",15)
+    _add("院感防控","","消毒灭菌合格率","100%","%","numeric_equal",15)
+
+    # 药事管理
+    _add("药事管理","","处方合格率","≥90%","%","numeric_greater_equal",20)
+    _add("药事管理","","抗菌药物使用强度(DDD)","≤40","DDD","numeric_less_equal",15)
+    _add("药事管理","","药品不良反应上报率","≥90%","%","numeric_greater_equal",15)
+    _add("药事管理","","基本药物使用比例","≥60%","%","numeric_greater_equal",15)
+    _add("药事管理","","特殊药品管理规范率","100%","%","numeric_equal",20)
+    _add("药事管理","","静脉输液率","≤80%","%","numeric_less_equal",15)
+
+    # 患者安全
+    _add("患者安全","","医疗安全不良事件上报率","≥95%","%","numeric_greater_equal",20)
+    _add("患者安全","","患者身份识别正确率","100%","%","numeric_equal",15)
+    _add("患者安全","","术前核查正确执行率","100%","%","numeric_equal",15)
+    _add("患者安全","","输血安全核查执行率","100%","%","numeric_equal",15)
+    _add("患者安全","","患者满意度","≥90%","%","numeric_greater_equal",20)
+    _add("患者安全","","医疗纠纷发生率","≤0.5%","%","numeric_less_equal",15)
+
+    # 医院管理
+    _add("医院管理","","依法执业合格率","100%","%","numeric_equal",20)
+    _add("医院管理","","人员持证上岗率","100%","%","numeric_equal",15)
+    _add("医院管理","","预算执行偏差率","≤5%","%","numeric_less_equal",15)
+    _add("医院管理","","固定资产完好率","≥95%","%","numeric_greater_equal",15)
+    _add("医院管理","","继续教育覆盖率","100%","%","numeric_equal",15)
+    _add("医院管理","","科研课题立项数","≥10项/年","项","numeric_greater_equal",20)
+
+    # 信息管理
+    _add("信息管理","","电子病历系统功能应用水平","≥4级","级","numeric_greater_equal",25)
+    _add("信息管理","","医院信息系统运行可靠率","≥99.9%","%","numeric_greater_equal",25)
+    _add("信息管理","","医疗数据质量合格率","≥95%","%","numeric_greater_equal",25)
+    _add("信息管理","","信息安全事件发生率","≤1次/年","次","numeric_less_equal",25)
+
+    # 后勤保障
+    _add("后勤保障","","消防演练完成率","100%","%","yesno",30)
+    _add("后勤保障","","设备完好率","≥95%","%","numeric_greater_equal",20)
+    _add("后勤保障","","水电气供应保障率","100%","%","numeric_equal",25)
+    _add("后勤保障","","环境卫生监测合格率","≥95%","%","numeric_greater_equal",25)
+
+    # 行风建设
+    _add("行风建设","","医德医风考评覆盖率","100%","%","numeric_equal",25)
+    _add("行风建设","","患者投诉处理及时率","≥95%","%","numeric_greater_equal",25)
+    _add("行风建设","","红包收受举报率","0%","%","numeric_equal",25)
+    _add("行风建设","","院务公开执行率","100%","%","numeric_equal",25)
+
+    print(f"  Total indicators: {_i-1}")
 
     def _make_assessment(name, dept_key, submitter_key, status, values):
         """Helper to create an assessment with scored items."""

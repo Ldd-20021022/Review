@@ -63,3 +63,24 @@ def unread_count(
         .count()
     )
     return {"count": count}
+
+@router.get("/stream")
+async def notification_stream(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """SSE endpoint for real-time notification count"""
+    from fastapi.responses import StreamingResponse
+    import asyncio
+    import json
+
+    async def generate():
+        while True:
+            count = db.query(Notification).filter(
+                Notification.user_id == user.id,
+                Notification.is_read == False,
+            ).count()
+            yield f"data: {json.dumps({'count': count})}\n\n"
+            await asyncio.sleep(15)
+
+    return StreamingResponse(generate(), media_type="text/event-stream")

@@ -81,7 +81,7 @@ export default defineComponent({
 
     onMounted(() => {
       fetchNotifs()
-      timer = setInterval(fetchNotifs, 30000)
+      timer = setInterval(fetchNotifs, 15000)  // 15s poll
     })
     onUnmounted(() => { if (timer) clearInterval(timer) })
 

@@ -31,3 +31,7 @@ export function rejectRating(id, feedback) {
 export function getStandards() {
   return get('/api/hospital-ratings/standards')
 }
+
+export function compareHistory(deptId) {
+  return get('/api/hospital-ratings/compare/' + deptId)
+}

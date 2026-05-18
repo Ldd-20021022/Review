@@ -1,7 +1,7 @@
 import { defineComponent, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '/src/shim/element-plus.js'
-import { getReport, getMyRatings } from '../../api/hospital-rating.js'
+import { getReport, getMyRatings, compareHistory } from '../../api/hospital-rating.js'
 import { post } from '../../api/client.js'
 
 export default defineComponent({
@@ -14,6 +14,7 @@ export default defineComponent({
     const loading = ref(false)
     const selectedId = ref(null)
     const resubmitting = ref(false)
+    const history = ref(null)
 
     async function fetchList() {
       list.value = await getMyRatings() || []
@@ -43,6 +44,17 @@ export default defineComponent({
       router.push(`/hospital-rating/form?edit=${id}`)
     }
 
+    async function fetchHistory() {
+      if (!report.value) return
+      // Find dept_id from the first item's context - we use the assessment's department
+      try {
+        const all = await getMyRatings()
+        if (all.length > 0) {
+          history.value = all
+        }
+      } catch (_) { history.value = null }
+    }
+
     function exportCSV() {
       if (!report.value || !report.value.items) return
       const rows = [['分类', '指标名称', '标准值', '实际值', '结果', '得分']]
@@ -69,6 +81,7 @@ export default defineComponent({
       const aid = route.query.assessment
       if (aid) { await fetchReport(Number(aid)) }
       else if (list.value.length > 0) { await fetchReport(list.value[0].id) }
+      await fetchHistory()
     })
 
     const statusMap = {
@@ -76,7 +89,7 @@ export default defineComponent({
       submitted: '📝 待审核', revising: '🔄 整改中', draft: '📋 草稿',
     }
 
-    return { report, list, loading, selectedId, resubmitting,
+    return { report, list, loading, selectedId, resubmitting, history,
       fetchReport, handleResubmit, goEdit, exportCSV, statusMap }
   },
   template: `
@@ -173,6 +186,27 @@ export default defineComponent({
         <p style="color:#64748b;font-size:14px;line-height:1.6;margin:0;white-space:pre-wrap">{{ r.feedback || '（无附加意见）' }}</p>
       </el-card>
     </div>
+
+    <!-- History Comparison -->
+    <el-card v-if="list.length > 1" style="margin-top:16px">
+      <template #header><span style="font-weight:bold">📈 历史对比</span></template>
+      <el-table :data="list" stripe size="small">
+        <el-table-column label="评级周期" prop="rating_cycle" />
+        <el-table-column label="总分" align="center">
+          <template #default="{ row }">
+            <span :style="{fontWeight:'bold',color: (row.total_score||0) >= 60 ? '#67c23a' : '#f56c6c'}">{{ row.total_score ?? '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" align="center">
+          <template #default="{ row }">{{ statusMap[row.status] || row.status }}</template>
+        </el-table-column>
+        <el-table-column label="操作" align="center" width="80">
+          <template #default="{ row }">
+            <el-button link size="small" @click="fetchReport(row.id)">查看</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
   </div>
 </div>
 `,

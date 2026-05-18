@@ -1,0 +1,11 @@
+{
+  "name": "三甲医院评级系统",
+  "short_name": "三甲评级",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1e293b",
+  "theme_color": "#1e293b",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

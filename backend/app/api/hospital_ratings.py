@@ -10,9 +10,15 @@ from ..models.assessment import Assessment, AssessmentItem
 from ..models.standard import StdCategory, StdIndicator
 from ..models.standard_set import StandardSet
 from ..models.department import Department
+from ..models.audit_log import AuditLog
 from ..middleware.tenant import get_current_tenant_id, get_current_user, get_current_user_tenant
 from ..models.user import UserTenant
 from ..services.compliance import check_compliance
+
+
+def _log(db, user_id, tenant_id, action, target_type, target_id, detail=""):
+    db.add(AuditLog(user_id=user_id, tenant_id=tenant_id, action=action,
+                     target_type=target_type, target_id=target_id, detail=detail))
 
 router = APIRouter(prefix="/api/hospital-ratings", tags=["hospital-ratings"])
 
@@ -123,6 +129,9 @@ def submit_rating(
     a.status = body.status
     if body.status == "submitted":
         a.submitted_at = datetime.now(timezone.utc)
+    _log(db, user.id, tenant_id,
+         "submit" if body.status == "submitted" else "draft",
+         "assessment", a.id, f"{dept.name} {body.rating_cycle} score:{a.total_score}")
     db.commit()
 
     return {
@@ -143,6 +152,7 @@ def update_and_resubmit(
     body: SubmitBody,
     tenant_id: int = Depends(get_current_tenant_id),
     db: Session = Depends(get_db),
+    user=Depends(get_current_user),
     _=Depends(get_current_user_tenant),
 ):
     """科室负责人修改已退回的评级数据并重新提交"""
@@ -189,6 +199,9 @@ def update_and_resubmit(
     a.status = body.status
     if body.status == "submitted":
         a.submitted_at = datetime.now(timezone.utc)
+    _log(db, user.id, tenant_id,
+         "edit" if body.status != "draft" else "draft",
+         "assessment", a.id, f"resubmit score:{a.total_score}")
     db.commit()
 
     return {
@@ -341,3 +354,29 @@ def list_hospital_standards(db: Session = Depends(get_db)):
         }
 
     return [_tree(c) for c in categories]
+
+# ---------- History Comparison ----------
+
+@router.get("/compare/{dept_id}")
+def compare_history(
+    dept_id: int,
+    tenant_id: int = Depends(get_current_tenant_id),
+    db: Session = Depends(get_db),
+):
+    """对比同一科室不同周期的评级数据"""
+    assessments = db.query(Assessment).filter(
+        Assessment.tenant_id == tenant_id,
+        Assessment.department_id == dept_id,
+    ).order_by(Assessment.created_at.desc()).limit(5).all()
+
+    result = []
+    for a in assessments:
+        compliant = sum(1 for it in a.items if it.is_compliant)
+        result.append({
+            "id": a.id, "name": a.name, "rating_cycle": a.rating_cycle,
+            "total_score": float(a.total_score) if a.total_score else 0,
+            "compliant": compliant, "total": len(a.items),
+            "status": a.status,
+            "submitted_at": a.submitted_at.isoformat() if a.submitted_at else None,
+        })
+    return result

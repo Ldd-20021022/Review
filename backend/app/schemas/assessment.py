@@ -1,7 +1,7 @@
 from typing import List, Optional
 from decimal import Decimal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, validator
 from datetime import datetime
 
 
@@ -31,7 +31,7 @@ class AssessmentInfo(BaseModel):
     status: str
     created_at: str
 
-    @field_validator('created_at', mode='before')
+    @validator('created_at', pre=True)
     @classmethod
     def dt_to_str(cls, v):
         return _dt_to_str(v)
@@ -74,7 +74,7 @@ class AssessmentDetail(BaseModel):
     created_at: str
     items: List[AssessmentItemInfo] = []
 
-    @field_validator('created_at', mode='before')
+    @validator('created_at', pre=True)
     @classmethod
     def dt_to_str(cls, v):
         return _dt_to_str(v)
