@@ -49,3 +49,7 @@ export function importAssessmentData(file, cycle) {
 export function copyPreviousCycle(cycle) {
   return post('/api/hospital-ratings/copy-previous', { rating_cycle: cycle })
 }
+
+export function getGapAnalysis(id) {
+  return get('/api/hospital-ratings/report/' + id + '/gap-analysis')
+}

@@ -1,7 +1,7 @@
 import { defineComponent, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '/src/shim/element-plus.js'
-import { getReport, getMyRatings, compareHistory } from '../../api/hospital-rating.js'
+import { getReport, getMyRatings, compareHistory, getGapAnalysis } from '../../api/hospital-rating.js'
 import { post } from '../../api/client.js'
 
 export default defineComponent({
@@ -15,6 +15,8 @@ export default defineComponent({
     const selectedId = ref(null)
     const resubmitting = ref(false)
     const history = ref(null)
+    const gapAnalysis = ref(null)
+    const analyzing = ref(false)
 
     async function fetchList() {
       list.value = await getMyRatings() || []
@@ -42,6 +44,14 @@ export default defineComponent({
 
     function goEdit(id) {
       router.push(`/hospital-rating/form?edit=${id}`)
+    }
+
+    async function fetchGapAnalysis() {
+      if (!report.value) return
+      analyzing.value = true
+      try { gapAnalysis.value = await getGapAnalysis(report.value.assessment_id) }
+      catch (e) { ElMessage.error('分析失败: ' + e.message) }
+      finally { analyzing.value = false }
     }
 
     async function fetchHistory() {
@@ -89,8 +99,8 @@ export default defineComponent({
       submitted: '📝 待审核', revising: '🔄 整改中', draft: '📋 草稿',
     }
 
-    return { report, list, loading, selectedId, resubmitting, history,
-      fetchReport, handleResubmit, goEdit, exportCSV, statusMap }
+    return { report, list, loading, selectedId, resubmitting, history, gapAnalysis, analyzing,
+      fetchReport, handleResubmit, goEdit, exportCSV, fetchGapAnalysis, statusMap }
   },
   template: `
 <div>
@@ -104,6 +114,7 @@ export default defineComponent({
       <a :href="'http://localhost:8000/api/hospital-ratings/report/' + report.assessment_id + '/pdf'" target="_blank" style="text-decoration:none">
         <el-button>📄 下载 PDF</el-button>
       </a>
+      <el-button @click="fetchGapAnalysis" :loading="analyzing" type="warning">🔍 AI 差距分析</el-button>
       <el-button @click="exportCSV">📥 导出 CSV</el-button>
       <el-button @click="window.print()">🖨️ 打印</el-button>
     </div>
@@ -189,6 +200,33 @@ export default defineComponent({
         <p style="color:#64748b;font-size:14px;line-height:1.6;margin:0;white-space:pre-wrap">{{ r.feedback || '（无附加意见）' }}</p>
       </el-card>
     </div>
+
+    <!-- AI Gap Analysis -->
+    <el-card v-if="gapAnalysis" style="margin-top:16px;border-left:4px solid #e6a23c">
+      <template #header>
+        <span style="font-weight:bold">🔍 AI 差距分析 — {{ gapAnalysis.overall_assessment }}</span>
+        <span style="color:#94a3b8;font-size:12px;margin-left:8px">
+          🔴 {{ gapAnalysis.urgent_count }}紧急 🟠 {{ gapAnalysis.high_count }}高优 🔵 {{ gapAnalysis.non_compliant_count }}未达标
+        </span>
+      </template>
+      <div v-for="(r, i) in gapAnalysis.recommendations" :key="i"
+        style="padding:10px 12px;margin-bottom:6px;border-radius:6px;font-size:13px"
+        :style="{background: r.priority === 'urgent' ? '#fef2f2' : r.priority === 'high' ? '#fff7ed' : '#f8fafc'}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-weight:600">{{ i+1 }}. {{ r.indicator_name }}</span>
+          <el-tag :type="r.priority === 'urgent' ? 'danger' : r.priority === 'high' ? 'warning' : 'info'" size="small">
+            {{ r.priority === 'urgent' ? '🔴 紧急' : r.priority === 'high' ? '🟠 高优' : '🔵 一般' }}
+          </el-tag>
+        </div>
+        <div style="color:#94a3b8;margin-bottom:4px">
+          当前: <span style="color:#f56c6c;font-weight:600">{{ r.current_value }}</span>
+          → 目标: <span style="color:#16a34a;font-weight:600">{{ r.target_value }}</span>
+          (差距 {{ r.gap_pct }}%)
+        </div>
+        <div style="color:#475569;line-height:1.5">{{ r.suggestion }}</div>
+        <div style="color:#94a3b8;font-size:11px;margin-top:4px">⏱ 建议整改期限: {{ r.timeline }}</div>
+      </div>
+    </el-card>
 
     <!-- History Comparison -->
     <el-card v-if="list.length > 1" style="margin-top:16px">

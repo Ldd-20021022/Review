@@ -606,3 +606,34 @@ def compare_history(
             "submitted_at": a.submitted_at.isoformat() if a.submitted_at else None,
         })
     return result
+
+# ---------- AI Gap Analysis ----------
+
+@router.get("/report/{aid}/gap-analysis")
+def gap_analysis(
+    aid: int,
+    tenant_id: int = Depends(get_current_tenant_id),
+    db: Session = Depends(get_db),
+):
+    """AI 差距分析 — 对未达标指标生成整改建议和优先级排序"""
+    a = db.query(Assessment).filter(
+        Assessment.id == aid, Assessment.tenant_id == tenant_id
+    ).first()
+    if not a:
+        raise HTTPException(404, "Assessment not found")
+
+    items = []
+    for item in a.items:
+        ind = db.get(StdIndicator, item.indicator_id)
+        cat = db.get(StdCategory, ind.category_id) if ind else None
+        if not ind:
+            continue
+        items.append({
+            "name": ind.name, "category_name": cat.name if cat else None,
+            "standard_value": ind.standard_value, "unit": ind.unit,
+            "indicator_type": ind.indicator_type,
+            "actual_value": item.actual_value, "is_compliant": item.is_compliant,
+        })
+
+    from ..services.gap_analysis import analyze_assessment
+    return analyze_assessment(items)

@@ -3,6 +3,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from '/src/shim/element-plus.js'
 import { useAuthStore } from '../../stores/auth.js'
 import { getDashboard, approveRating, rejectRating, getReport } from '../../api/hospital-rating.js'
+import { donutChart } from '../../utils/charts.js'
 
 export default defineComponent({
   name: 'HRDashboard',
@@ -94,6 +95,15 @@ export default defineComponent({
     }
 
     const deptReport = ref(null)
+    const chartHTML = computed(() => {
+      if (!dashboard.value) return ''
+      const d = dashboard.value
+      return donutChart([
+        { value: d.approved || 0, color: '#67c23a' },
+        { value: d.rejected || 0, color: '#f56c6c' },
+        { value: (d.pending || 0) + (d.not_submitted || 0), color: '#e6a23c' },
+      ], 100)
+    })
 
     async function fetch() {
       loading.value = true
@@ -168,7 +178,7 @@ export default defineComponent({
     onMounted(fetch)
 
     return {
-      dashboard, loading, rejectDialog, rejectForm, rejecting, isManager, selected, batchProcessing, deptReport,
+      dashboard, loading, rejectDialog, rejectForm, rejecting, isManager, selected, batchProcessing, deptReport, chartHTML,
       goReport, openReject, handleReject, handleApprove, statusMap, exportDashboardCSV,
       toggleSelect, selectAllSubmitted, clearSelection, batchApprove, openBatchReject,
     }
@@ -179,7 +189,13 @@ export default defineComponent({
   <el-button v-if="isManager" @click="exportDashboardCSV" style="float:right;margin-top:-44px" size="small">📥 导出 CSV</el-button>
 
   <el-row :gutter="16" style="margin-bottom:20px">
-    <el-col :span="6">
+    <el-col :span="4" v-if="isManager">
+      <el-card shadow="hover" style="text-align:center">
+        <div v-html="chartHTML"></div>
+        <p style="color:#909399;font-size:11px;margin:4px 0 0">达标分布</p>
+      </el-card>
+    </el-col>
+    <el-col :span="isManager ? 5 : 6">
       <el-card shadow="hover" style="text-align:center;border-left:3px solid #409eff">
         <p style="color:#909399;font-size:13px;margin:0 0 8px">📊 {{ isManager ? '全院均分' : '科室得分' }}</p>
         <h1 style="margin:0;color:#409eff;font-size:28px">{{ dashboard?.average_score ?? '-' }}</h1>

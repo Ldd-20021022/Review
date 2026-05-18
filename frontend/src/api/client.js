@@ -1,4 +1,5 @@
-const BASE_URL = 'http://localhost:8000'
+// Auto-detect: Docker (nginx proxy) vs local dev
+const BASE_URL = window.location.port === '80' || window.location.port === '' ? '' : 'http://localhost:8000'
 
 async function request(method, url, data = null) {
   const headers = { 'Content-Type': 'application/json' }
