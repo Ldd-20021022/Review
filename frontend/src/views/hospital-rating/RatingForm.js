@@ -1,17 +1,21 @@
 import { defineComponent, ref, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '/src/shim/element-plus.js'
-import { getStandards, submitRating } from '../../api/hospital-rating.js'
+import { getStandards, submitRating, updateRating, getReport } from '../../api/hospital-rating.js'
 import { checkCompliance, calcScore } from '../../utils/compliance.js'
 
 export default defineComponent({
   name: 'HRRatingForm',
   setup() {
+    const route = useRoute()
+    const router = useRouter()
     const categories = ref([])
     const formValues = ref({})
     const formRemarks = ref({})
     const activeNames = ref([])
     const submitting = ref(false)
     const cycle = ref('2025年度')
+    const editId = ref(null)
 
     const cycleOptions = [
       '2024年度','2025年度','2026年度',
@@ -63,6 +67,20 @@ export default defineComponent({
       activeNames.value = categories.value.map(c => String(c.id))
     }
 
+    async function loadEditData(id) {
+      try {
+        const report = await getReport(id)
+        cycle.value = report.rating_cycle || '2025年度'
+        editId.value = id
+        for (const item of report.items || []) {
+          if (item.indicator_id) {
+            formValues.value[item.indicator_id] = item.actual_value || ''
+            formRemarks.value[item.indicator_id] = item.remark || ''
+          }
+        }
+      } catch (_) { /* ignore */ }
+    }
+
     async function handleSubmit() {
       const details = []
       for (const ind of allIndicators.value) {
@@ -81,10 +99,18 @@ export default defineComponent({
       }
       submitting.value = true
       try {
-        await submitRating({ rating_cycle: cycle.value, details })
-        ElMessage.success('提交成功！')
+        const payload = { rating_cycle: cycle.value, details }
+        if (editId.value) {
+          await updateRating(editId.value, payload)
+          ElMessage.success('修改已提交，等待审核')
+        } else {
+          await submitRating(payload)
+          ElMessage.success('提交成功！')
+        }
         formValues.value = {}
         formRemarks.value = {}
+        editId.value = null
+        router.push('/hospital-rating/reports')
       } catch (e) {
         ElMessage.error('提交失败: ' + e.message)
       } finally {
@@ -92,24 +118,32 @@ export default defineComponent({
       }
     }
 
-    onMounted(fetchStandards)
+    onMounted(async () => {
+      await fetchStandards()
+      const eid = route.query.edit
+      if (eid) await loadEditData(Number(eid))
+    })
 
     return {
-      categories, formValues, formRemarks, activeNames, submitting, cycle, cycleOptions,
+      categories, formValues, formRemarks, activeNames, submitting, cycle, cycleOptions, editId,
       allIndicators, stats, checkCompliance, handleSubmit,
     }
   },
   template: `
 <div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-    <h2>📋 三甲评级数据填报</h2>
+    <h2>{{ editId ? '✏️ 修改评级数据' : '📋 三甲评级数据填报' }}</h2>
     <div style="display:flex;gap:8px;align-items:center">
-      <el-select v-model="cycle" style="width:140px" size="small">
+      <el-select v-model="cycle" style="width:140px" size="small" :disabled="!!editId">
         <el-option v-for="o in cycleOptions" :key="o" :label="o" :value="o" />
       </el-select>
-      <el-button type="primary" @click="handleSubmit" :loading="submitting">📤 提交审核</el-button>
+      <el-button type="primary" @click="handleSubmit" :loading="submitting">
+        {{ editId ? '📤 重新提交审核' : '📤 提交审核' }}
+      </el-button>
     </div>
   </div>
+
+  <el-alert v-if="editId" title="修改模式：已加载原有数据，修改后点击「重新提交审核」" type="warning" :closable="false" style="margin-bottom:16px" />
 
   <div v-if="allIndicators.length === 0" style="text-align:center;padding:60px;color:#909399">
     <p style="font-size:48px;margin:0">📐</p>
@@ -125,12 +159,8 @@ export default defineComponent({
         </span>
       </template>
       <el-table :data="(cat.indicators || [])" stripe size="small">
-        <el-table-column label="指标名称" min-width="180">
-          <template #default="{ row }">{{ row.name }}</template>
-        </el-table-column>
-        <el-table-column label="标准值" width="120" align="center">
-          <template #default="{ row }">{{ row.standard_value }}{{ row.unit ? ' ' + row.unit : '' }}</template>
-        </el-table-column>
+        <el-table-column label="指标名称" min-width="180"><template #default="{ row }">{{ row.name }}</template></el-table-column>
+        <el-table-column label="标准值" width="120" align="center"><template #default="{ row }">{{ row.standard_value }}{{ row.unit ? ' ' + row.unit : '' }}</template></el-table-column>
         <el-table-column label="实际值" width="160" align="center">
           <template #default="{ row }">
             <el-input v-model="formValues[row.id]" size="small" style="width:120px" :placeholder="row.unit || '输入值'" />
@@ -144,9 +174,7 @@ export default defineComponent({
           </template>
         </el-table-column>
         <el-table-column label="备注" width="160">
-          <template #default="{ row }">
-            <el-input v-model="formRemarks[row.id]" size="small" placeholder="可选" />
-          </template>
+          <template #default="{ row }"><el-input v-model="formRemarks[row.id]" size="small" placeholder="可选" /></template>
         </el-table-column>
       </el-table>
     </el-collapse-item>
@@ -157,7 +185,9 @@ export default defineComponent({
       📊 当前预估：<strong>总分 {{ stats.totalScore }} 分</strong> |
       达标 <span style="color:#67c23a;font-weight:600">{{ stats.compliantCount }}</span> / {{ allIndicators.length }} 项
     </div>
-    <el-button type="primary" @click="handleSubmit" :loading="submitting">📤 提交审核</el-button>
+    <el-button type="primary" @click="handleSubmit" :loading="submitting">
+      {{ editId ? '📤 重新提交审核' : '📤 提交审核' }}
+    </el-button>
   </div>
 </div>
 `,

@@ -1,4 +1,4 @@
-import { get, post } from './client.js'
+import { get, post, put } from './client.js'
 
 export function getDashboard() {
   return get('/api/dashboard/director', { set_type: 'hospital_grade' })
@@ -6,6 +6,10 @@ export function getDashboard() {
 
 export function submitRating(data) {
   return post('/api/hospital-ratings/submit', data)
+}
+
+export function updateRating(id, data) {
+  return put('/api/hospital-ratings/submit/' + id, data)
 }
 
 export function getMyRatings() {

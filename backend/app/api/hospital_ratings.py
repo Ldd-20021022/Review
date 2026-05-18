@@ -133,6 +133,71 @@ def submit_rating(
     }
 
 
+# ---------- Edit & Resubmit ----------
+
+@router.put("/submit/{aid}")
+def update_and_resubmit(
+    aid: int,
+    body: SubmitBody,
+    tenant_id: int = Depends(get_current_tenant_id),
+    db: Session = Depends(get_db),
+    _=Depends(get_current_user_tenant),
+):
+    """科室负责人修改已退回的评级数据并重新提交"""
+    a = db.query(Assessment).filter(
+        Assessment.id == aid, Assessment.tenant_id == tenant_id
+    ).first()
+    if not a:
+        raise HTTPException(404, "Assessment not found")
+    if a.status not in ("draft", "rejected", "revising"):
+        raise HTTPException(400, f"Cannot edit: current status is '{a.status}'")
+
+    # Remove existing items
+    db.query(AssessmentItem).filter(AssessmentItem.assessment_id == aid).delete()
+    db.flush()
+
+    items_out = []
+    for d in body.details:
+        ind = db.get(StdIndicator, d.indicator_id)
+        if not ind:
+            continue
+        is_compliant = None
+        score = None
+        if d.actual_value is not None and ind.standard_value and ind.indicator_type:
+            result = check_compliance(d.actual_value, ind.standard_value, ind.indicator_type)
+            is_compliant = result["is_compliant"]
+            score = result["score"]
+        item = AssessmentItem(
+            assessment_id=a.id, indicator_id=d.indicator_id,
+            actual_value=d.actual_value, is_compliant=is_compliant,
+            score=score, gap_note=d.remark,
+            updated_at=datetime.now(timezone.utc) if d.actual_value else None,
+        )
+        db.add(item)
+        db.flush()
+        cat = db.get(StdCategory, ind.category_id)
+        items_out.append(_build_item_dict(item, ind, cat))
+
+    scored = [it for it in items_out if it["score"] is not None and it["weight"]]
+    if scored:
+        tw = sum(s["score"] * s["weight"] / 100 for s in scored)
+        total_w = sum(s["weight"] for s in scored)
+        a.total_score = round(tw / total_w * 100, 2) if total_w else 0
+
+    a.status = "submitted"
+    a.submitted_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return {
+        "assessment_id": a.id,
+        "total_score": float(a.total_score) if a.total_score else 0,
+        "total_items": len(items_out),
+        "compliant_count": sum(1 for it in items_out if it["is_compliant"]),
+        "non_compliant_count": sum(1 for it in items_out if it["is_compliant"] is False),
+        "items": items_out,
+    }
+
+
 # ---------- My Department ----------
 
 @router.get("/my-department")
@@ -200,6 +265,16 @@ def get_report(
         })
 
     compliant = [i for i in items if i["is_compliant"]]
+    reviews = [
+        {
+            "id": r.id,
+            "reviewer_id": r.reviewer_id,
+            "action": r.action,
+            "feedback": r.feedback,
+            "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
+        }
+        for r in (a.reviews or [])
+    ]
     return {
         "assessment_id": a.id,
         "name": a.name,
@@ -212,6 +287,7 @@ def get_report(
         "passed": float(a.total_score or 0) >= 60,
         "status": a.status,
         "items": items,
+        "reviews": reviews,
     }
 
 

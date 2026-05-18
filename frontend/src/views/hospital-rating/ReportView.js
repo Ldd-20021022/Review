@@ -123,13 +123,19 @@ export default defineComponent({
       </el-table>
     </el-card>
 
-    <!-- Review history -->
-    <el-card v-if="report.status === 'rejected'" style="margin-top:16px;background:#fff5f5">
-      <template #header><span style="font-weight:bold;color:#c62828">📝 退回意见</span></template>
-      <div style="color:#64748b;font-size:14px;line-height:1.6">
-        <p>请根据院长意见修改后重新提交。修改完成后点击上方「📤 提交审核」按钮。</p>
-      </div>
-    </el-card>
+    <!-- Review feedback -->
+    <div v-if="report.reviews && report.reviews.length > 0" style="margin-top:16px">
+      <el-card v-for="r in report.reviews" :key="r.id"
+        :style="{background: r.action === 'rejected' ? '#fff5f5' : '#f0fdf4', marginBottom:'8px'}">
+        <template #header>
+          <span :style="{fontWeight:'bold',color: r.action === 'rejected' ? '#c62828' : '#16a34a'}">
+            {{ r.action === 'rejected' ? '❌ 退回意见' : '✅ 审核通过' }}
+          </span>
+          <span style="color:#94a3b8;font-size:12px;margin-left:12px">{{ r.reviewed_at?.slice(0,16) || '' }}</span>
+        </template>
+        <p style="color:#64748b;font-size:14px;line-height:1.6;margin:0;white-space:pre-wrap">{{ r.feedback || '（无附加意见）' }}</p>
+      </el-card>
+    </div>
   </div>
 </div>
 `,
