@@ -127,6 +127,18 @@ export default defineComponent({
       </el-card>
     </div>
 
+    <el-card v-if="report.categories_breakdown" style="margin-bottom:16px">
+      <template #header><span style="font-weight:bold">分类达标情况</span></template>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div v-for="cat in report.categories_breakdown" :key="cat.name"
+          style="flex:1;min-width:150px;padding:12px;border-radius:8px;background:#f8fafc;text-align:center">
+          <div style="font-size:13px;font-weight:600;margin-bottom:6px">{{ cat.name }}</div>
+          <el-progress :percentage="cat.rate" :color="cat.rate >= 80 ? '#67c23a' : cat.rate >= 60 ? '#e6a23c' : '#f56c6c'" :stroke-width="8" />
+          <div style="font-size:12px;color:#94a3b8;margin-top:4px">{{ cat.compliant }}/{{ cat.total }} 达标</div>
+        </div>
+      </div>
+    </el-card>
+
     <el-card>
       <template #header><span style="font-weight:bold">指标明细</span></template>
       <el-table :data="report.items || []" stripe>

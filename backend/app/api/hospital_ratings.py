@@ -265,6 +265,20 @@ def get_report(
         })
 
     compliant = [i for i in items if i["is_compliant"]]
+    # Per-category breakdown
+    cat_stats = {}
+    for i in items:
+        cn = i["category_name"] or "未分类"
+        if cn not in cat_stats:
+            cat_stats[cn] = {"total": 0, "compliant": 0}
+        cat_stats[cn]["total"] += 1
+        if i["is_compliant"]:
+            cat_stats[cn]["compliant"] += 1
+    categories_breakdown = [
+        {"name": cn, "total": s["total"], "compliant": s["compliant"],
+         "rate": round(s["compliant"] / s["total"] * 100, 1) if s["total"] else 0}
+        for cn, s in cat_stats.items()
+    ]
     reviews = [
         {
             "id": r.id,
@@ -287,6 +301,7 @@ def get_report(
         "passed": float(a.total_score or 0) >= 60,
         "status": a.status,
         "items": items,
+        "categories_breakdown": categories_breakdown,
         "reviews": reviews,
     }
 

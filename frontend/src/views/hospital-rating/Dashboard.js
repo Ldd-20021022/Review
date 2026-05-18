@@ -137,10 +137,12 @@ export default defineComponent({
       <el-table-column label="评级周期" width="110">
         <template #default="{ row }">{{ row.rating_cycle || '-' }}</template>
       </el-table-column>
-      <el-table-column label="总分" width="90" align="center">
+      <el-table-column label="总分" width="160" align="center">
         <template #default="{ row }">
-          <span v-if="row.score != null" style="font-weight:bold;font-size:16px"
-            :style="{color: row.score >= 60 ? '#67c23a' : '#f56c6c'}">{{ row.score }}</span>
+          <div v-if="row.score != null" style="display:flex;align-items:center;gap:6px">
+            <el-progress :percentage="row.score" :color="row.score >= 60 ? '#67c23a' : '#f56c6c'" :stroke-width="6" style="flex:1" />
+            <span :style="{fontWeight:'bold',color:row.score >= 60 ? '#67c23a' : '#f56c6c',fontSize:'13px'}">{{ row.score }}</span>
+          </div>
           <span v-else style="color:#c0c4cc">-</span>
         </template>
       </el-table-column>
