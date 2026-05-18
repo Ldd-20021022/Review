@@ -41,16 +41,15 @@ export default defineComponent({
       try { notifs.value = (await listNotifications()).slice(0, 5) || [] } catch (_) { notifs.value = [] }
     }
 
-    async function handleMarkRead(nid) {
+    async function handleMarkRead(n) {
       try {
-        await markRead(nid)
+        await markRead(n.id)
         notifCount.value = Math.max(0, notifCount.value - 1)
-        notifs.value = notifs.value.map(n => n.id === nid ? { ...n, is_read: true } : n)
+        notifs.value = notifs.value.map(x => x.id === n.id ? { ...x, is_read: true } : x)
       } catch (_) {}
-    }
-
-    function viewAll() {
-      router.push('/hospital-rating/reports')
+      if (n.related_id) {
+        router.push('/hospital-rating/reports?assessment=' + n.related_id)
+      }
     }
 
     const visibleMenus = computed(() =>
@@ -73,7 +72,7 @@ export default defineComponent({
     return {
       route, auth, notifCount, notifs, visibleMenus, visibleAdminMenus, showAdmin,
       handleSelect, handleLogout, roleLabels,
-      fetchNotifList, handleMarkRead, viewAll,
+      fetchNotifList, handleMarkRead,
     }
   },
   template: `
@@ -108,12 +107,9 @@ export default defineComponent({
         <div v-else>
           <div v-for="n in notifs" :key="n.id"
             style="padding:8px 0;border-bottom:1px solid #f1f5f9;cursor:pointer"
-            @click="handleMarkRead(n.id)">
+            @click="handleMarkRead(n)">
             <div :style="{fontWeight: n.is_read ? 400 : 700, fontSize:'13px'}">{{ n.title }}</div>
             <div style="font-size:12px;color:#94a3b8;margin-top:2px">{{ n.content?.substring(0, 50) }}...</div>
-          </div>
-          <div @click="viewAll" style="text-align:center;padding:8px;color:#3b82f6;font-size:13px;cursor:pointer">
-            查看全部 →
           </div>
         </div>
       </el-popover>

@@ -1,4 +1,5 @@
 """Seed database with PJ.md sample data for testing."""
+from datetime import datetime, timezone
 from app.database import SessionLocal, engine, Base
 from app.models import *
 from app.utils.security import hash_password
@@ -115,21 +116,96 @@ def seed():
         inds[name] = ind
         print(f"    Indicator: {ind.id} - {name} ({sv} / type:{itype})")
 
-    # ── Sample assessment (急诊科, submitted) ──
-    a1 = Assessment(
-        tenant_id=t.id,
-        name="急诊科 — 2025年度评级",
-        target_level=5,
-        department_id=depts["急诊科"].id,
-        rating_cycle="2025年度",
-        submitter_id=dept_heads["急诊科"].id,
-        status="draft",
-    )
-    db.add(a1)
-    db.flush()
-    for ind in inds.values():
-        db.add(AssessmentItem(assessment_id=a1.id, indicator_id=ind.id))
-    print(f"Assessment: {a1.id} - {a1.name}")
+    def _make_assessment(name, dept_key, submitter_key, status, values):
+        """Helper to create an assessment with scored items."""
+        a = Assessment(
+            tenant_id=t.id,
+            name=f"{depts[dept_key].name} — 2025年度三甲评级",
+            target_level=1,
+            department_id=depts[dept_key].id,
+            rating_cycle="2025年度",
+            submitter_id=dept_heads[submitter_key].id,
+            status=status,
+            set_id=hg_set.id,
+        )
+        db.add(a)
+        db.flush()
+        tw, total_w = 0, 0
+        for ind_name, actual_val in values.items():
+            ind = inds[ind_name]
+            item = AssessmentItem(
+                assessment_id=a.id, indicator_id=ind.id,
+                actual_value=actual_val,
+            )
+            if ind.standard_value and ind.indicator_type:
+                from app.services.compliance import check_compliance
+                result = check_compliance(actual_val, ind.standard_value, ind.indicator_type)
+                item.is_compliant = result["is_compliant"]
+                item.score = result["score"]
+                if ind.weight:
+                    tw += (item.score or 0) * float(ind.weight) / 100
+                    total_w += float(ind.weight)
+            item.updated_at = datetime.now(timezone.utc)
+            db.add(item)
+        a.total_score = round(tw / total_w * 100, 2) if total_w else 0
+        a.submitted_at = datetime.now(timezone.utc) if status != "draft" else None
+        db.flush()
+        return a
+
+    # 急诊科 — submitted (mixed compliance)
+    a1 = _make_assessment("急诊科", "急诊科", "急诊科", "submitted", {
+        "住院患者死亡率": "0.6%",      # compliant (≤0.8%)
+        "手术并发症发生率": "2.5%",    # non-compliant (>2%)
+        "I类切口感染率": "0.3%",       # compliant (≤0.5%)
+        "护理不良事件上报率": "92%",   # non-compliant (<95%)
+        "基础护理合格率": "93%",       # compliant (≥90%)
+        "手卫生依从率": "85%",         # compliant (≥80%)
+        "处方合格率": "91%",           # compliant (≥90%)
+        "消防演练完成率": "是",        # compliant
+    })
+    print(f"Assessment: {a1.id} - {a1.name} (score:{a1.total_score})")
+
+    # 外科 — rejected
+    a2 = _make_assessment("外科", "外科", "外科", "rejected", {
+        "住院患者死亡率": "1.2%",      # non-compliant
+        "手术并发症发生率": "3.5%",    # non-compliant
+        "I类切口感染率": "0.8%",       # non-compliant
+        "护理不良事件上报率": "88%",   # non-compliant
+        "基础护理合格率": "89%",       # non-compliant
+        "手卫生依从率": "75%",         # non-compliant
+        "处方合格率": "95%",           # compliant
+        "消防演练完成率": "是",        # compliant
+    })
+    db.add(ReviewRecord(
+        assessment_id=a2.id, reviewer_id=director.id,
+        action="rejected",
+        feedback="手术并发症发生率和住院患者死亡率超标严重，请外科限期整改。重点加强围手术期管理和感染控制措施，一个月内重新提交。",
+    ))
+    db.add(Notification(
+        user_id=dept_heads["外科"].id,
+        title="⚠️ 您的科室评级未通过，已被退回",
+        content=f"【外科 — 2025年度三甲评级】已被院长退回。\n\n总分: {a2.total_score} 分\n\n院长意见: 手术并发症发生率和住院患者死亡率超标严重，请外科限期整改。\n\n请尽快整改后重新提交！",
+        type="reject",
+        related_id=a2.id,
+    ))
+    print(f"Assessment: {a2.id} - {a2.name} (score:{a2.total_score}, rejected)")
+
+    # 内科 — approved
+    a3 = _make_assessment("内科", "内科", "内科", "approved", {
+        "住院患者死亡率": "0.5%",
+        "手术并发症发生率": "1.2%",
+        "I类切口感染率": "0.3%",
+        "护理不良事件上报率": "97%",
+        "基础护理合格率": "94%",
+        "手卫生依从率": "88%",
+        "处方合格率": "96%",
+        "消防演练完成率": "是",
+    })
+    db.add(ReviewRecord(
+        assessment_id=a3.id, reviewer_id=director.id,
+        action="approved", feedback="各项指标均达标，继续保持。",
+    ))
+    print(f"Assessment: {a3.id} - {a3.name} (score:{a3.total_score}, approved)")
 
     db.commit()
     db.close()
