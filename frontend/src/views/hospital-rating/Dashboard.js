@@ -2,7 +2,7 @@ import { defineComponent, ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from '/src/shim/element-plus.js'
 import { useAuthStore } from '../../stores/auth.js'
-import { getDashboard, approveRating, rejectRating } from '../../api/hospital-rating.js'
+import { getDashboard, approveRating, rejectRating, getReport } from '../../api/hospital-rating.js'
 
 export default defineComponent({
   name: 'HRDashboard',
@@ -93,13 +93,20 @@ export default defineComponent({
       URL.revokeObjectURL(url)
     }
 
+    const deptReport = ref(null)
+
     async function fetch() {
       loading.value = true
       try {
         dashboard.value = await getDashboard()
-      } finally {
-        loading.value = false
-      }
+        if (!isManager.value && dashboard.value?.departments?.length > 0) {
+          const aid = dashboard.value.departments[0].assessment_id
+          if (aid) {
+            try { deptReport.value = await getReport(aid) }
+            catch (_) { deptReport.value = null }
+          }
+        }
+      } finally { loading.value = false }
     }
 
     function goReport(id) {
@@ -161,7 +168,7 @@ export default defineComponent({
     onMounted(fetch)
 
     return {
-      dashboard, loading, rejectDialog, rejectForm, rejecting, isManager, selected, batchProcessing,
+      dashboard, loading, rejectDialog, rejectForm, rejecting, isManager, selected, batchProcessing, deptReport,
       goReport, openReject, handleReject, handleApprove, statusMap, exportDashboardCSV,
       toggleSelect, selectAllSubmitted, clearSelection, batchApprove, openBatchReject,
     }
@@ -266,12 +273,53 @@ export default defineComponent({
     </el-table>
   </el-card>
 
-  <el-card v-else-if="dashboard?.departments?.length > 0">
-    <template #header><span style="font-weight:bold">本科室指标概况</span></template>
-    <p>当前评级周期：{{ dashboard.departments[0].rating_cycle || '暂无' }}</p>
-    <p>达标项：{{ (dashboard.departments[0].total_items || 0) - (dashboard.departments[0].non_compliant_count || 0) }} / {{ dashboard.departments[0].total_items || 0 }}</p>
+  <el-card v-else-if="dashboard?.departments?.length > 0" style="margin-bottom:16px">
+    <template #header>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:bold">📊 本科室指标概况</span>
+        <el-tag :type="dashboard.departments[0].status === 'rejected' ? 'danger' : dashboard.departments[0].status === 'approved' ? 'success' : 'warning'" size="small">
+          {{ statusMap[dashboard.departments[0].status] || dashboard.departments[0].status }}
+        </el-tag>
+      </div>
+    </template>
+    <el-row :gutter="16" style="margin-bottom:12px">
+      <el-col :span="8">
+        <div style="text-align:center;padding:8px;background:#f8fafc;border-radius:6px">
+          <div style="font-size:20px;font-weight:700" :style="{color: (dashboard.departments[0].score || 0) >= 60 ? '#67c23a' : '#f56c6c'}">{{ dashboard.departments[0].score ?? '-' }}</div>
+          <div style="font-size:11px;color:#94a3b8">总分</div>
+        </div>
+      </el-col>
+      <el-col :span="8">
+        <div style="text-align:center;padding:8px;background:#f8fafc;border-radius:6px">
+          <div style="font-size:20px;font-weight:700;color:#f56c6c">{{ dashboard.departments[0].non_compliant_count || 0 }}</div>
+          <div style="font-size:11px;color:#94a3b8">未达标项</div>
+        </div>
+      </el-col>
+      <el-col :span="8">
+        <div style="text-align:center;padding:8px;background:#f8fafc;border-radius:6px">
+          <div style="font-size:20px;font-weight:700;color:#3b82f6">{{ dashboard.departments[0].total_items || 0 }}</div>
+          <div style="font-size:11px;color:#94a3b8">总指标数</div>
+        </div>
+      </el-col>
+    </el-row>
+    <!-- Non-compliant items with gaps -->
+    <div v-if="deptReport?.items" style="margin-top:12px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:#c62828" v-if="deptReport.items.filter(i=>!i.is_compliant).length > 0">
+        ⚠️ 未达标指标 ({{ deptReport.items.filter(i=>!i.is_compliant).length }} 项)
+      </div>
+      <div v-for="it in deptReport.items.filter(i=>!i.is_compliant)" :key="it.id"
+        style="padding:6px 10px;margin-bottom:4px;background:#fff5f5;border-radius:4px;font-size:13px;display:flex;justify-content:space-between;align-items:center">
+        <span>{{ it.category_name }} · {{ it.name }}</span>
+        <span style="color:#c62828;font-weight:600">
+          {{ it.actual_value || '-' }} / {{ it.standard_value }}{{ it.unit || '' }}
+        </span>
+      </div>
+      <div v-if="deptReport.items.filter(i=>!i.is_compliant).length === 0" style="color:#67c23a;font-size:13px;text-align:center;padding:12px">
+        ✅ 全部达标
+      </div>
+    </div>
     <el-button v-if="dashboard.departments[0].assessment_id" size="small" type="primary" style="margin-top:8px"
-      @click="goReport(dashboard.departments[0].assessment_id)">查看详细报告 →</el-button>
+      @click="goReport(dashboard.departments[0].assessment_id)">查看完整报告 →</el-button>
   </el-card>
 
   <el-dialog v-if="isManager" v-model="rejectDialog" :title="rejectForm.batch ? '❌ 批量退回科室评级' : '❌ 退回科室评级'" width="500px">

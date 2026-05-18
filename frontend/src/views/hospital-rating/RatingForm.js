@@ -45,6 +45,14 @@ export default defineComponent({
       return result
     })
 
+    const fillProgress = computed(() => {
+      let filled = 0
+      for (const ind of allIndicators.value) {
+        if (formValues.value[ind.id] && formValues.value[ind.id] !== '') filled++
+      }
+      return { filled, total: allIndicators.value.length, pct: allIndicators.value.length > 0 ? Math.round(filled / allIndicators.value.length * 100) : 0 }
+    })
+
     const stats = computed(() => {
       let weighted = 0, totalW = 0, compliant = 0
       for (const ind of allIndicators.value) {
@@ -153,7 +161,7 @@ export default defineComponent({
 
     return {
       categories, formValues, formRemarks, activeNames, submitting, saving, cycle, cycleOptions, editId,
-      allIndicators, stats, checkCompliance, handleSubmit, handleSaveDraft, validateValue,
+      allIndicators, stats, fillProgress, checkCompliance, handleSubmit, handleSaveDraft, validateValue,
     }
   },
   template: `
@@ -216,7 +224,9 @@ export default defineComponent({
   <div v-if="allIndicators.length > 0" style="margin-top:16px;padding:12px 16px;background:#e3f2fd;border-radius:8px;display:flex;justify-content:space-between;align-items:center">
     <div>
       📊 当前预估：<strong>总分 {{ stats.totalScore }} 分</strong> |
-      达标 <span style="color:#67c23a;font-weight:600">{{ stats.compliantCount }}</span> / {{ allIndicators.length }} 项
+      达标 <span style="color:#67c23a;font-weight:600">{{ stats.compliantCount }}</span> / {{ fillProgress.total }} 项 |
+      📝 已填 <span style="color:#3b82f6;font-weight:600">{{ fillProgress.filled }}</span> / {{ fillProgress.total }} 项
+      <el-progress :percentage="fillProgress.pct" :stroke-width="4" style="width:120px;display:inline-block;margin-left:8px;vertical-align:middle" />
     </div>
     <el-button @click="handleSaveDraft" :loading="saving">💾 保存草稿</el-button>
     <el-button type="primary" @click="handleSubmit" :loading="submitting">
