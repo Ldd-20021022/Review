@@ -22,6 +22,7 @@ from .api.hospital_ratings import router as hospital_ratings_router
 from .api.knowledge import router as knowledge_router
 from .api.ai_endpoints import router as ai_router
 from .api.workflow import router as workflow_router
+from .api.integration import router as integration_router
 
 
 @asynccontextmanager
@@ -57,6 +58,7 @@ app.include_router(hospital_ratings_router)
 app.include_router(knowledge_router)
 app.include_router(ai_router)
 app.include_router(workflow_router)
+app.include_router(integration_router)
 
 
 @app.get("/api/health")

@@ -2,6 +2,7 @@ import { defineComponent, ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth.js'
 import { unreadCount, listNotifications, markRead } from '../../api/notifications.js'
+import { initTheme, toggleTheme } from '../../utils/theme.js'
 
 const mainMenus = [
   { path: '/hospital-rating/dashboard', title: '📊 综合仪表盘', roles: ['admin', 'director', 'expert', 'leader', 'dept_head'] },
@@ -83,14 +84,15 @@ export default defineComponent({
     function handleLogout() { auth.logout(); router.push('/login') }
 
     onMounted(() => {
+      initTheme()
       fetchNotifs()
-      timer = setInterval(fetchNotifs, 15000)  // 15s poll
+      timer = setInterval(fetchNotifs, 15000)
     })
     onUnmounted(() => { if (timer) clearInterval(timer) })
 
     return {
       route, auth, notifCount, notifs, visibleMenus, visibleAdminMenus, showAdmin,
-      collapsed, isMobile, toggleSidebar,
+      collapsed, isMobile, toggleSidebar, toggleTheme,
       handleSelect, handleLogout, roleLabels,
       fetchNotifList, handleMarkRead, markAllRead,
     }
@@ -150,6 +152,7 @@ export default defineComponent({
           <strong>{{ auth.user?.name || '' }}</strong>
           <el-tag size="small" style="margin-left:8px">{{ roleLabels[auth.user?.role] || '' }}</el-tag>
         </span>
+        <el-button text @click="toggleTheme" style="font-size:16px" title="切换主题">🌓</el-button>
         <el-button text @click="handleLogout" style="color:#94a3b8">退出</el-button>
       </div>
     </el-header>
