@@ -19,6 +19,8 @@ from .api.dashboard import router as dashboard_router
 from .api.reviews import router as reviews_router
 from .api.notifications import router as notifications_router
 from .api.hospital_ratings import router as hospital_ratings_router
+from .api.knowledge import router as knowledge_router
+from .api.ai_endpoints import router as ai_router
 
 
 @asynccontextmanager
@@ -51,6 +53,8 @@ app.include_router(dashboard_router)
 app.include_router(reviews_router)
 app.include_router(notifications_router)
 app.include_router(hospital_ratings_router)
+app.include_router(knowledge_router)
+app.include_router(ai_router)
 
 
 @app.get("/api/health")

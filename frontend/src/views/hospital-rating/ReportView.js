@@ -2,6 +2,7 @@ import { defineComponent, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '/src/shim/element-plus.js'
 import { getReport, getMyRatings, compareHistory, getGapAnalysis } from '../../api/hospital-rating.js'
+import { getAISummary, getHealthCommissionExport } from '../../api/ai.js'
 import { post } from '../../api/client.js'
 
 export default defineComponent({
@@ -17,6 +18,9 @@ export default defineComponent({
     const history = ref(null)
     const gapAnalysis = ref(null)
     const analyzing = ref(false)
+    const aiReport = ref(null)
+    const anomalies = ref([])
+    const aiLoading = ref(false)
 
     async function fetchList() {
       list.value = await getMyRatings() || []
@@ -44,6 +48,29 @@ export default defineComponent({
 
     function goEdit(id) {
       router.push(`/hospital-rating/form?edit=${id}`)
+    }
+
+    async function fetchAISummary() {
+      if (!report.value) return
+      aiLoading.value = true
+      try {
+        const res = await getAISummary(report.value.assessment_id)
+        aiReport.value = res.report
+        anomalies.value = res.anomalies || []
+      } catch (e) { ElMessage.error('AI分析失败: ' + e.message) }
+      finally { aiLoading.value = false }
+    }
+
+    async function exportJSON() {
+      if (!report.value) return
+      try {
+        const data = await getHealthCommissionExport(report.value.assessment_id)
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = (report.value.name || 'export') + '_卫健委格式.json'
+        a.click(); URL.revokeObjectURL(url)
+      } catch (e) { ElMessage.error('导出失败') }
     }
 
     async function fetchGapAnalysis() {
@@ -100,7 +127,8 @@ export default defineComponent({
     }
 
     return { report, list, loading, selectedId, resubmitting, history, gapAnalysis, analyzing,
-      fetchReport, handleResubmit, goEdit, exportCSV, fetchGapAnalysis, statusMap }
+      aiReport, anomalies, aiLoading,
+      fetchReport, handleResubmit, goEdit, exportCSV, fetchGapAnalysis, fetchAISummary, exportJSON, statusMap }
   },
   template: `
 <div>
@@ -114,7 +142,9 @@ export default defineComponent({
       <a :href="'http://localhost:8000/api/hospital-ratings/report/' + report.assessment_id + '/pdf'" target="_blank" style="text-decoration:none">
         <el-button>📄 下载 PDF</el-button>
       </a>
-      <el-button @click="fetchGapAnalysis" :loading="analyzing" type="warning">🔍 AI 差距分析</el-button>
+      <el-button @click="fetchAISummary" :loading="aiLoading" type="warning">🤖 AI 智能报告</el-button>
+      <el-button @click="fetchGapAnalysis" :loading="analyzing" type="warning">🔍 差距分析</el-button>
+      <el-button @click="exportJSON">📋 卫健委格式</el-button>
       <el-button @click="exportCSV">📥 导出 CSV</el-button>
       <el-button @click="window.print()">🖨️ 打印</el-button>
     </div>
@@ -200,6 +230,22 @@ export default defineComponent({
         <p style="color:#64748b;font-size:14px;line-height:1.6;margin:0;white-space:pre-wrap">{{ r.feedback || '（无附加意见）' }}</p>
       </el-card>
     </div>
+
+    <!-- AI Intelligent Report -->
+    <el-card v-if="aiReport" style="margin-top:16px;border-left:4px solid #3b82f6">
+      <template #header>
+        <span style="font-weight:bold">🤖 AI 智能报告</span>
+        <span style="color:#94a3b8;font-size:12px;margin-left:8px">分数: {{ aiReport.score }} {{ aiReport.passed ? '✅ 达标' : '❌ 未达标' }}</span>
+      </template>
+      <div style="line-height:1.8;color:#475569;white-space:pre-wrap;font-size:14px">{{ aiReport.markdown }}</div>
+      <!-- Anomalies -->
+      <div v-if="anomalies.length > 0" style="margin-top:16px;padding:12px;background:#fff7ed;border-radius:6px">
+        <strong style="color:#c2410c">⚠️ 异常数据检测 ({{ anomalies.length }} 项)：</strong>
+        <div v-for="(a, i) in anomalies" :key="i" style="font-size:13px;color:#9a3412;margin-top:4px">
+          {{ a.indicator }} — {{ a.detail }} ({{ a.severity === 'high' ? '🔴严重' : a.severity === 'medium' ? '🟡注意' : '🔵提示' }})
+        </div>
+      </div>
+    </el-card>
 
     <!-- AI Gap Analysis -->
     <el-card v-if="gapAnalysis" style="margin-top:16px;border-left:4px solid #e6a23c">

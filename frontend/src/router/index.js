@@ -6,6 +6,7 @@ import HRRatingForm from '../views/hospital-rating/RatingForm.js'
 import HRReportView from '../views/hospital-rating/ReportView.js'
 import HRStandardManage from '../views/hospital-rating/StandardManage.js'
 import HRProfile from '../views/hospital-rating/Profile.js'
+import HRKnowledge from '../views/hospital-rating/Knowledge.js'
 import AdminDepartments from '../views/admin/Departments.js'
 import AdminUsers from '../views/admin/Users.js'
 
@@ -27,6 +28,7 @@ const routes = [
       { path: 'hospital-rating/standards', name: 'HRStandards', component: HRStandardManage, meta: { title: '标准库管理', ...ADMIN } },
       { path: 'admin/departments', name: 'AdminDepartments', component: AdminDepartments, meta: { title: '科室管理', ...ADMIN } },
       { path: 'admin/users', name: 'AdminUsers', component: AdminUsers, meta: { title: '用户管理', ...ADMIN } },
+      { path: 'hospital-rating/knowledge', name: 'HRKnowledge', component: HRKnowledge, meta: { title: '知识库', ...ALL } },
       { path: 'hospital-rating/profile', name: 'HRProfile', component: HRProfile, meta: { title: '个人中心', ...ALL } },
     ],
   },
