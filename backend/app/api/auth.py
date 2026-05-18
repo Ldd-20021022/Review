@@ -14,9 +14,13 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 @router.post("/login", response_model=LoginResponse)
 def login(req: LoginRequest, db: Session = Depends(get_db)):
+    from ..middleware.security import check_login_lockout, record_login_failure, record_login_success
+    check_login_lockout(req.phone)
     user = db.query(User).filter(User.phone == req.phone).first()
     if not user or not verify_password(req.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        record_login_failure(req.phone)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="账号或密码错误")
+    record_login_success(req.phone)
 
     # Pick the first tenant as active context (platform admin can have none)
     first_ut = (

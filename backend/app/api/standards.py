@@ -20,7 +20,7 @@ def list_categories(db: Session = Depends(get_db)):
     """Return tree of all categories (L1 → L2)."""
     categories = db.query(StdCategory).order_by(StdCategory.sort_order).all()
     # Build tree: L1 with children
-    lookup = {c.id: CategoryInfo.from_orm(c) for c in categories}
+    lookup = {c.id: CategoryInfo.model_validate(c) for c in categories}
     roots = []
     for c in categories:
         if c.parent_id and c.parent_id in lookup:
