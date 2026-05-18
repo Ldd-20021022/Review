@@ -12,12 +12,70 @@ export default defineComponent({
     const dashboard = ref(null)
     const loading = ref(false)
     const rejectDialog = ref(false)
-    const rejectForm = ref({ assessment_id: null, dept_name: '', score: 0, feedback: '' })
+    const rejectForm = ref({ assessment_id: null, dept_name: '', score: 0, feedback: '', batch: false })
     const rejecting = ref(false)
+    const selected = ref(new Set())
+    const batchProcessing = ref(false)
 
     const isManager = computed(() =>
       auth.user?.role === 'admin' || auth.user?.role === 'director'
     )
+
+    function toggleSelect(aid) {
+      const s = new Set(selected.value)
+      s.has(aid) ? s.delete(aid) : s.add(aid)
+      selected.value = s
+    }
+
+    function selectAllSubmitted() {
+      const submitted = (dashboard.value?.departments || [])
+        .filter(d => d.status === 'submitted' && d.assessment_id)
+        .map(d => d.assessment_id)
+      selected.value = new Set(submitted)
+    }
+
+    function clearSelection() { selected.value = new Set() }
+
+    async function batchApprove() {
+      const ids = [...selected.value]
+      if (ids.length === 0) { ElMessage.warning('请选择科室'); return }
+      await ElMessageBox.confirm(`确认通过 ${ids.length} 个科室的评级吗？`, '批量通过', { type: 'success' })
+      batchProcessing.value = true
+      let ok = 0
+      for (const id of ids) {
+        try { await approveRating(id); ok++ } catch (_) {}
+      }
+      ElMessage.success(`已通过 ${ok}/${ids.length} 个科室`)
+      clearSelection()
+      batchProcessing.value = false
+      await fetch()
+    }
+
+    function openBatchReject() {
+      const ids = [...selected.value]
+      if (ids.length === 0) { ElMessage.warning('请选择科室'); return }
+      const deptNames = (dashboard.value?.departments || [])
+        .filter(d => ids.includes(d.assessment_id)).map(d => d.name).join('、')
+      rejectForm.value = { assessment_id: ids[0], dept_name: `${ids.length} 个科室 (${deptNames})`, score: 0, feedback: '', batch: true, ids }
+      rejectDialog.value = true
+    }
+
+    async function handleReject() {
+      if (!rejectForm.value.feedback.trim()) { ElMessage.warning('请填写退回意见'); return }
+      rejecting.value = true
+      const ids = rejectForm.value.batch ? rejectForm.value.ids : [rejectForm.value.assessment_id]
+      try {
+        let ok = 0
+        for (const id of ids) {
+          try { await rejectRating(id, rejectForm.value.feedback); ok++ } catch (_) {}
+        }
+        ElMessage.success(`已退回 ${ok}/${ids.length} 个科室`)
+        rejectDialog.value = false
+        clearSelection()
+        await fetch()
+      } catch (e) { ElMessage.error('操作失败: ' + e.message) }
+      finally { rejecting.value = false }
+    }
 
     function exportDashboardCSV() {
       const depts = dashboard.value?.departments || []
@@ -103,8 +161,9 @@ export default defineComponent({
     onMounted(fetch)
 
     return {
-      dashboard, loading, rejectDialog, rejectForm, rejecting, isManager,
+      dashboard, loading, rejectDialog, rejectForm, rejecting, isManager, selected, batchProcessing,
       goReport, openReject, handleReject, handleApprove, statusMap, exportDashboardCSV,
+      toggleSelect, selectAllSubmitted, clearSelection, batchApprove, openBatchReject,
     }
   },
   template: `
@@ -141,13 +200,31 @@ export default defineComponent({
 
   <el-card v-if="isManager">
     <template #header>
-      <span style="font-weight:bold">科室评级状态一览</span>
-      <span style="color:#909399;font-size:12px;margin-left:8px">
-        共 {{ dashboard?.total_departments ?? 0 }} 个科室
-      </span>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span>
+          <span style="font-weight:bold">科室评级状态一览</span>
+          <span style="color:#909399;font-size:12px;margin-left:8px">共 {{ dashboard?.total_departments ?? 0 }} 个科室</span>
+        </span>
+        <div v-if="selected.size > 0" style="display:flex;gap:6px">
+          <span style="font-size:13px;color:#64748b">已选 {{ selected.size }} 个</span>
+          <el-button size="small" type="success" @click="batchApprove" :loading="batchProcessing">✅ 批量通过</el-button>
+          <el-button size="small" type="danger" @click="openBatchReject">❌ 批量退回</el-button>
+          <el-button size="small" @click="clearSelection">取消选择</el-button>
+        </div>
+        <div v-else>
+          <el-button size="small" @click="selectAllSubmitted">全选待审核</el-button>
+        </div>
+      </div>
     </template>
 
-    <el-table :data="dashboard?.departments ?? []" stripe>
+    <el-table :data="dashboard?.departments ?? []" stripe @selection-change="()=>{}">
+      <el-table-column width="40" align="center">
+        <template #default="{ row }">
+          <el-checkbox v-if="row.status === 'submitted' && row.assessment_id"
+            :model-value="selected.has(row.assessment_id)"
+            @change="toggleSelect(row.assessment_id)" />
+        </template>
+      </el-table-column>
       <el-table-column label="科室" width="120">
         <template #default="{ row }">🏥 {{ row.name }}</template>
       </el-table-column>
@@ -197,13 +274,11 @@ export default defineComponent({
       @click="goReport(dashboard.departments[0].assessment_id)">查看详细报告 →</el-button>
   </el-card>
 
-  <el-dialog v-if="isManager" v-model="rejectDialog" title="❌ 退回科室评级" width="500px">
+  <el-dialog v-if="isManager" v-model="rejectDialog" :title="rejectForm.batch ? '❌ 批量退回科室评级' : '❌ 退回科室评级'" width="500px">
     <div style="margin-bottom:16px">
       <p><strong>科室：</strong>{{ rejectForm.dept_name }}</p>
-      <p><strong>当前得分：</strong>
-        <span :style="{color: rejectForm.score >= 60 ? '#e6a23c' : '#f56c6c',fontWeight:'bold'}">
-          {{ rejectForm.score }} 分
-        </span>
+      <p v-if="!rejectForm.batch"><strong>当前得分：</strong>
+        <span :style="{color: rejectForm.score >= 60 ? '#e6a23c' : '#f56c6c',fontWeight:'bold'}">{{ rejectForm.score }} 分</span>
       </p>
     </div>
     <el-form label-width="90px">

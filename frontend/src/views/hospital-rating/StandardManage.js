@@ -180,6 +180,9 @@ export default defineComponent({
         <input type="file" accept=".xlsx,.xls" style="display:none" @change="handleFileChange" />
       </label>
       <el-button @click="openTextImport">📝 文本/Word 导入</el-button>
+      <a href="http://localhost:8000/api/standards/template" target="_blank" style="text-decoration:none">
+        <el-button>📥 下载模板</el-button>
+      </a>
       <el-button @click="openCatDialog">➕ 添加分类</el-button>
     </div>
   </div>
