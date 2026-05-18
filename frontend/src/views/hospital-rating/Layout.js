@@ -31,14 +31,16 @@ export default defineComponent({
 
     auth.fetchMe()
 
-    const collapsed = ref(window.innerWidth < 768)
+    const ww = ref(window.innerWidth)
+    const collapsed = ref(isMobile)
     const notifCount = ref(0)
     const notifs = ref([])
     let timer = null
 
     function toggleSidebar() { collapsed.value = !collapsed.value }
-    function onResize() { collapsed.value = window.innerWidth < 768 }
+    function onResize() { ww.value = window.innerWidth; collapsed.value = ww.value < 768 }
     window.addEventListener('resize', onResize)
+    const isMobile = computed(() => ww.value < 768)
 
     async function fetchNotifs() {
       try { notifCount.value = (await unreadCount()).count || 0 } catch (_) {}
@@ -88,7 +90,7 @@ export default defineComponent({
 
     return {
       route, auth, notifCount, notifs, visibleMenus, visibleAdminMenus, showAdmin,
-      collapsed, toggleSidebar,
+      collapsed, isMobile, toggleSidebar,
       handleSelect, handleLogout, roleLabels,
       fetchNotifList, handleMarkRead, markAllRead,
     }
@@ -98,10 +100,10 @@ export default defineComponent({
   <!-- Mobile overlay -->
   <div v-if="!collapsed" @click="collapsed = true"
     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:999"
-    :style="{display: window.innerWidth < 768 ? 'block' : 'none'}" />
+    :style="{display: isMobile ? 'block' : 'none'}" />
 
   <el-aside :width="collapsed ? '0px' : '200px'" style="background:#1e293b;transition:width .3s;overflow:hidden;z-index:1000"
-    :style="{position: window.innerWidth < 768 ? 'fixed' : 'relative', height: window.innerWidth < 768 ? '100vh' : 'auto'}">
+    :style="{position: isMobile ? 'fixed' : 'relative', height: isMobile ? '100vh' : 'auto'}">
     <div style="padding:16px 12px;font-weight:700;font-size:15px;color:#fff;border-bottom:1px solid #334155;white-space:nowrap">
       🏥 三甲评级系统
     </div>
