@@ -1,8 +1,10 @@
-import { defineComponent, ref, onMounted, computed } from 'vue'
+import { defineComponent, ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from '/src/shim/element-plus.js'
+import { ElMessage, ElMessageBox } from '/src/shim/element-plus.js'
 import { getStandards, submitRating, updateRating, getReport } from '../../api/hospital-rating.js'
 import { checkCompliance, calcScore } from '../../utils/compliance.js'
+
+const LS_KEY = 'hr_draft'
 
 export default defineComponent({
   name: 'HRRatingForm',
@@ -17,6 +19,29 @@ export default defineComponent({
     const saving = ref(false)
     const cycle = ref('2025年度')
     const editId = ref(null)
+    const lastSaved = ref('')
+    let autoSaveTimer = null
+
+    function saveToLocal() {
+      const data = { values: formValues.value, remarks: formRemarks.value, cycle: cycle.value, time: new Date().toISOString() }
+      localStorage.setItem(LS_KEY, JSON.stringify(data))
+      lastSaved.value = new Date().toLocaleTimeString()
+    }
+
+    function loadFromLocal() {
+      try {
+        const raw = localStorage.getItem(LS_KEY)
+        if (!raw) return false
+        const data = JSON.parse(raw)
+        if (data.values) formValues.value = { ...formValues.value, ...data.values }
+        if (data.remarks) formRemarks.value = { ...formRemarks.value, ...data.remarks }
+        if (data.cycle) cycle.value = data.cycle
+        return true
+      } catch (_) { return false }
+    }
+
+    function clearLocal() { localStorage.removeItem(LS_KEY); lastSaved.value = '' }
+    function hasLocalDraft() { return !!localStorage.getItem(LS_KEY) }
 
     const cycleOptions = [
       '2024年度','2025年度','2026年度',
@@ -100,9 +125,11 @@ export default defineComponent({
           // For drafts, just update without changing status
           await updateRating(editId.value, { ...payload, status: 'draft' })
           ElMessage.success('草稿已保存')
+          clearLocal()
         } else {
           const res = await submitRating(payload)
           editId.value = res.assessment_id
+          clearLocal()
           router.push('/hospital-rating/reports?assessment=' + res.assessment_id)
           ElMessage.success('草稿已保存')
         }
@@ -144,6 +171,7 @@ export default defineComponent({
           await submitRating(payload)
           ElMessage.success('提交成功！')
         }
+        clearLocal()
         formValues.value = {}
         formRemarks.value = {}
         editId.value = null
@@ -156,12 +184,23 @@ export default defineComponent({
     onMounted(async () => {
       await fetchStandards()
       const eid = route.query.edit
-      if (eid) await loadEditData(Number(eid))
+      if (eid) {
+        await loadEditData(Number(eid))
+      } else if (!eid && hasLocalDraft()) {
+        try {
+          await ElMessageBox.confirm('检测到本地草稿，是否恢复？', '恢复草稿', { confirmButtonText: '恢复', cancelButtonText: '放弃' })
+          loadFromLocal()
+          ElMessage.success('草稿已恢复')
+        } catch (_) { clearLocal() }
+      }
+      autoSaveTimer = setInterval(saveToLocal, 30000)
     })
+
+    onUnmounted(() => { if (autoSaveTimer) clearInterval(autoSaveTimer) })
 
     return {
       categories, formValues, formRemarks, activeNames, submitting, saving, cycle, cycleOptions, editId,
-      allIndicators, stats, fillProgress, checkCompliance, handleSubmit, handleSaveDraft, validateValue,
+      allIndicators, stats, fillProgress, lastSaved, checkCompliance, handleSubmit, handleSaveDraft, validateValue,
     }
   },
   template: `
@@ -227,6 +266,7 @@ export default defineComponent({
       达标 <span style="color:#67c23a;font-weight:600">{{ stats.compliantCount }}</span> / {{ fillProgress.total }} 项 |
       📝 已填 <span style="color:#3b82f6;font-weight:600">{{ fillProgress.filled }}</span> / {{ fillProgress.total }} 项
       <el-progress :percentage="fillProgress.pct" :stroke-width="4" style="width:120px;display:inline-block;margin-left:8px;vertical-align:middle" />
+      <span v-if="lastSaved" style="color:#94a3b8;font-size:11px;margin-left:12px">💾 {{ lastSaved }}</span>
     </div>
     <el-button @click="handleSaveDraft" :loading="saving">💾 保存草稿</el-button>
     <el-button type="primary" @click="handleSubmit" :loading="submitting">
