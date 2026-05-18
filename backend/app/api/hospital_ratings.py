@@ -27,6 +27,7 @@ class SubmitBody(BaseModel):
     department_id: Optional[int] = None
     rating_cycle: str
     details: List[SubmitDetail]
+    status: str = "submitted"  # "draft" or "submitted"
 
 
 def _build_item_dict(item, ind, cat):
@@ -119,8 +120,9 @@ def submit_rating(
         total_w = sum(s["weight"] for s in scored)
         a.total_score = round(tw / total_w * 100, 2) if total_w else 0
 
-    a.status = "submitted"
-    a.submitted_at = datetime.now(timezone.utc)
+    a.status = body.status
+    if body.status == "submitted":
+        a.submitted_at = datetime.now(timezone.utc)
     db.commit()
 
     return {
@@ -184,8 +186,9 @@ def update_and_resubmit(
         total_w = sum(s["weight"] for s in scored)
         a.total_score = round(tw / total_w * 100, 2) if total_w else 0
 
-    a.status = "submitted"
-    a.submitted_at = datetime.now(timezone.utc)
+    a.status = body.status
+    if body.status == "submitted":
+        a.submitted_at = datetime.now(timezone.utc)
     db.commit()
 
     return {

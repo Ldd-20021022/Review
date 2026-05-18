@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -77,9 +78,27 @@ def register(req: LoginRequest, db: Session = Depends(get_db)):
     user = User(
         phone=req.phone,
         password_hash=hash_password(req.password),
-        name=req.phone,  # default name
+        name=req.phone,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     return {"id": user.id, "phone": user.phone, "name": user.name}
+
+
+class ChangePasswordBody(BaseModel):
+    old_password: str
+    new_password: str
+
+
+@router.post("/change-password")
+def change_password(
+    body: ChangePasswordBody,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not verify_password(body.old_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="当前密码不正确")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
+    return {"ok": True}

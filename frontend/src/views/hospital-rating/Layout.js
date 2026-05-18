@@ -7,6 +7,7 @@ const mainMenus = [
   { path: '/hospital-rating/dashboard', title: '📊 综合仪表盘', roles: ['admin', 'director', 'expert', 'leader', 'dept_head'] },
   { path: '/hospital-rating/form', title: '📋 数据填报', roles: ['admin', 'director', 'expert', 'dept_head'] },
   { path: '/hospital-rating/reports', title: '📄 评级报告', roles: ['admin', 'director', 'expert', 'leader', 'dept_head'] },
+  { path: '/hospital-rating/profile', title: '👤 个人中心', roles: ['admin', 'director', 'expert', 'leader', 'dept_head'] },
 ]
 
 const adminMenus = [

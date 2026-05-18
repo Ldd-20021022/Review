@@ -14,6 +14,7 @@ export default defineComponent({
     const formRemarks = ref({})
     const activeNames = ref([])
     const submitting = ref(false)
+    const saving = ref(false)
     const cycle = ref('2025年度')
     const editId = ref(null)
 
@@ -81,25 +82,44 @@ export default defineComponent({
       } catch (_) { /* ignore */ }
     }
 
-    async function handleSubmit() {
+    async function handleSaveDraft() {
+      const details = getDetails()
+      if (details.length === 0) { ElMessage.warning('请至少填写一项指标数据'); return }
+      saving.value = true
+      try {
+        const payload = { rating_cycle: cycle.value, details, status: 'draft' }
+        if (editId.value) {
+          // For drafts, just update without changing status
+          await updateRating(editId.value, { ...payload, status: 'draft' })
+          ElMessage.success('草稿已保存')
+        } else {
+          const res = await submitRating(payload)
+          editId.value = res.assessment_id
+          router.push('/hospital-rating/reports?assessment=' + res.assessment_id)
+          ElMessage.success('草稿已保存')
+        }
+      } catch (e) {
+        ElMessage.error('保存失败: ' + e.message)
+      } finally { saving.value = false }
+    }
+
+    function getDetails() {
       const details = []
       for (const ind of allIndicators.value) {
         const val = formValues.value[ind.id]
         if (val !== undefined && val !== '') {
-          details.push({
-            indicator_id: ind.id,
-            actual_value: String(val),
-            remark: formRemarks.value[ind.id] || '',
-          })
+          details.push({ indicator_id: ind.id, actual_value: String(val), remark: formRemarks.value[ind.id] || '' })
         }
       }
-      if (details.length === 0) {
-        ElMessage.warning('请至少填写一项指标数据')
-        return
-      }
+      return details
+    }
+
+    async function handleSubmit() {
+      const details = getDetails()
+      if (details.length === 0) { ElMessage.warning('请至少填写一项指标数据'); return }
       submitting.value = true
       try {
-        const payload = { rating_cycle: cycle.value, details }
+        const payload = { rating_cycle: cycle.value, details, status: 'submitted' }
         if (editId.value) {
           await updateRating(editId.value, payload)
           ElMessage.success('修改已提交，等待审核')
@@ -113,9 +133,7 @@ export default defineComponent({
         router.push('/hospital-rating/reports')
       } catch (e) {
         ElMessage.error('提交失败: ' + e.message)
-      } finally {
-        submitting.value = false
-      }
+      } finally { submitting.value = false }
     }
 
     onMounted(async () => {
@@ -125,8 +143,8 @@ export default defineComponent({
     })
 
     return {
-      categories, formValues, formRemarks, activeNames, submitting, cycle, cycleOptions, editId,
-      allIndicators, stats, checkCompliance, handleSubmit,
+      categories, formValues, formRemarks, activeNames, submitting, saving, cycle, cycleOptions, editId,
+      allIndicators, stats, checkCompliance, handleSubmit, handleSaveDraft,
     }
   },
   template: `
@@ -137,6 +155,7 @@ export default defineComponent({
       <el-select v-model="cycle" style="width:140px" size="small" :disabled="!!editId">
         <el-option v-for="o in cycleOptions" :key="o" :label="o" :value="o" />
       </el-select>
+      <el-button @click="handleSaveDraft" :loading="saving">💾 保存草稿</el-button>
       <el-button type="primary" @click="handleSubmit" :loading="submitting">
         {{ editId ? '📤 重新提交审核' : '📤 提交审核' }}
       </el-button>
@@ -185,6 +204,7 @@ export default defineComponent({
       📊 当前预估：<strong>总分 {{ stats.totalScore }} 分</strong> |
       达标 <span style="color:#67c23a;font-weight:600">{{ stats.compliantCount }}</span> / {{ allIndicators.length }} 项
     </div>
+    <el-button @click="handleSaveDraft" :loading="saving">💾 保存草稿</el-button>
     <el-button type="primary" @click="handleSubmit" :loading="submitting">
       {{ editId ? '📤 重新提交审核' : '📤 提交审核' }}
     </el-button>

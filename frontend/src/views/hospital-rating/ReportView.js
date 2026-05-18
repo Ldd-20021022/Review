@@ -89,6 +89,7 @@ export default defineComponent({
       <el-button v-if="report.status === 'rejected' || report.status === 'draft'"
         type="primary" @click="handleResubmit" :loading="resubmitting">📤 提交审核</el-button>
       <el-button @click="exportCSV">📥 导出 CSV</el-button>
+      <el-button @click="window.print()">🖨️ 打印</el-button>
     </div>
   </div>
 
