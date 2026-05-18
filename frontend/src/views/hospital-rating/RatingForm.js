@@ -103,6 +103,15 @@ export default defineComponent({
       } finally { saving.value = false }
     }
 
+    function validateValue(val, ind) {
+      if (!val || val === '') return null
+      if (ind.indicator_type === 'yesno') return null // any value ok for yesno
+      const cleaned = String(val).replace('%', '').trim()
+      if (cleaned === '') return null
+      if (isNaN(parseFloat(cleaned))) return '请输入有效数字'
+      return null
+    }
+
     function getDetails() {
       const details = []
       for (const ind of allIndicators.value) {
@@ -144,7 +153,7 @@ export default defineComponent({
 
     return {
       categories, formValues, formRemarks, activeNames, submitting, saving, cycle, cycleOptions, editId,
-      allIndicators, stats, checkCompliance, handleSubmit, handleSaveDraft,
+      allIndicators, stats, checkCompliance, handleSubmit, handleSaveDraft, validateValue,
     }
   },
   template: `
@@ -182,7 +191,12 @@ export default defineComponent({
         <el-table-column label="标准值" width="120" align="center"><template #default="{ row }">{{ row.standard_value }}{{ row.unit ? ' ' + row.unit : '' }}</template></el-table-column>
         <el-table-column label="实际值" width="160" align="center">
           <template #default="{ row }">
-            <el-input v-model="formValues[row.id]" size="small" style="width:120px" :placeholder="row.unit || '输入值'" />
+            <el-input v-model="formValues[row.id]" size="small" style="width:120px"
+              :placeholder="row.unit || '输入值'"
+              :class="{ 'is-error': validateValue(formValues[row.id], row) }" />
+            <div v-if="validateValue(formValues[row.id], row)" style="color:#f56c6c;font-size:11px;margin-top:2px">
+              {{ validateValue(formValues[row.id], row) }}
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="90" align="center">

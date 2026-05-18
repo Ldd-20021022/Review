@@ -53,6 +53,16 @@ export default defineComponent({
       }
     }
 
+    async function markAllRead() {
+      for (const n of notifs.value) {
+        if (!n.is_read) {
+          try { await markRead(n.id) } catch (_) {}
+        }
+      }
+      notifCount.value = 0
+      notifs.value = notifs.value.map(x => ({ ...x, is_read: true }))
+    }
+
     const visibleMenus = computed(() =>
       mainMenus.filter(m => m.roles.includes(auth.user?.role))
     )
@@ -73,7 +83,7 @@ export default defineComponent({
     return {
       route, auth, notifCount, notifs, visibleMenus, visibleAdminMenus, showAdmin,
       handleSelect, handleLogout, roleLabels,
-      fetchNotifList, handleMarkRead,
+      fetchNotifList, handleMarkRead, markAllRead,
     }
   },
   template: `
@@ -104,6 +114,10 @@ export default defineComponent({
             <el-button text style="font-size:18px" title="消息通知">🔔</el-button>
           </el-badge>
         </template>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;margin-bottom:4px">
+          <span style="font-size:13px;font-weight:600">消息通知</span>
+          <el-button v-if="notifCount > 0" text size="small" @click="markAllRead">全部已读</el-button>
+        </div>
         <div v-if="notifs.length === 0" style="text-align:center;padding:20px;color:#94a3b8">暂无通知</div>
         <div v-else>
           <div v-for="n in notifs" :key="n.id"
