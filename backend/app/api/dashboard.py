@@ -81,6 +81,33 @@ def director_dashboard(
     scores = [s["score"] for s in dept_stats if s["score"] is not None]
     avg_score = round(sum(scores) / len(scores), 1) if scores else 0
 
+    # Category-level compliance across all assessments
+    cat_compliance = {}
+    for s in dept_stats:
+        aid = s.get("assessment_id")
+        if not aid: continue
+        a = db.get(Assessment, aid)
+        if not a: continue
+        for item in a.items:
+            ind = db.get(StdIndicator, item.indicator_id)
+            if not ind: continue
+            cat = db.get(StdCategory, ind.category_id)
+            cn = cat.name if cat else "其他"
+            if cn not in cat_compliance:
+                cat_compliance[cn] = {"total": 0, "compliant": 0}
+            cat_compliance[cn]["total"] += 1
+            if item.is_compliant:
+                cat_compliance[cn]["compliant"] += 1
+    category_stats = [
+        {"name": cn, "total": s["total"], "compliant": s["compliant"],
+         "rate": round(s["compliant"]/s["total"]*100, 1) if s["total"] else 0}
+        for cn, s in sorted(cat_compliance.items(), key=lambda x: x[1]["compliant"]/x[1]["total"] if x[1]["total"] else 0)
+    ]
+
+    # Urgent departments (rejected + not submitted)
+    urgent = [s for s in dept_stats if s["status"] in ("rejected", "not_submitted")]
+    urgent.sort(key=lambda x: (x["score"] or 0))
+
     return {
         "total_departments": len(dept_stats),
         "approved": approved,
@@ -90,6 +117,8 @@ def director_dashboard(
         "average_score": avg_score,
         "departments": dept_stats,
         "is_manager": is_manager,
+        "category_stats": category_stats,
+        "urgent": urgent[:5],
     }
 
 
