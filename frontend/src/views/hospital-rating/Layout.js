@@ -32,15 +32,15 @@ export default defineComponent({
     auth.fetchMe()
 
     const ww = ref(window.innerWidth)
-    const collapsed = ref(isMobile)
+    const isMobile = computed(() => ww.value < 768)
+    const collapsed = ref(isMobile.value)
     const notifCount = ref(0)
     const notifs = ref([])
     let timer = null
 
     function toggleSidebar() { collapsed.value = !collapsed.value }
-    function onResize() { ww.value = window.innerWidth; collapsed.value = ww.value < 768 }
+    function onResize() { ww.value = window.innerWidth; collapsed.value = isMobile.value }
     window.addEventListener('resize', onResize)
-    const isMobile = computed(() => ww.value < 768)
 
     async function fetchNotifs() {
       try { notifCount.value = (await unreadCount()).count || 0 } catch (_) {}
@@ -146,11 +146,12 @@ export default defineComponent({
         </div>
       </el-popover>
 
-      <span style="font-size:13px;color:#64748b">
-        <strong>{{ auth.user?.name || '' }}</strong>
-        <el-tag size="small" style="margin-left:8px">{{ roleLabels[auth.user?.role] || '' }}</el-tag>
-      </span>
-      <el-button text @click="handleLogout" style="color:#94a3b8">退出</el-button>
+        <span style="font-size:13px;color:#64748b">
+          <strong>{{ auth.user?.name || '' }}</strong>
+          <el-tag size="small" style="margin-left:8px">{{ roleLabels[auth.user?.role] || '' }}</el-tag>
+        </span>
+        <el-button text @click="handleLogout" style="color:#94a3b8">退出</el-button>
+      </div>
     </el-header>
     <el-main style="background:#f8fafc">
       <router-view />
