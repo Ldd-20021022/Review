@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.tenant import Tenant
 from ..schemas.admin import TenantInfo, TenantCreate
-from ..middleware.tenant import require_role
+from ..middleware.tenant import require_role, get_current_user
+from ..models.user import UserTenant
 
 router = APIRouter(prefix="/api/tenants", tags=["tenants"])
 
@@ -43,3 +44,14 @@ def update_tenant(tid: int, data: TenantCreate, db: Session = Depends(get_db), _
     db.commit()
     db.refresh(t)
     return t
+
+@router.get("/mine")
+def my_tenants(
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Return all tenants the current user belongs to."""
+    uts = db.query(UserTenant).filter(UserTenant.user_id == user.id).all()
+    return [{"id": ut.tenant_id, "role": ut.role, "dept_id": ut.dept_id,
+             "name": db.get(Tenant, ut.tenant_id).name if db.get(Tenant, ut.tenant_id) else str(ut.tenant_id)}
+            for ut in uts]

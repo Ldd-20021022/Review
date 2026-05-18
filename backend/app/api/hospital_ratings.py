@@ -355,6 +355,80 @@ def list_hospital_standards(db: Session = Depends(get_db)):
 
     return [_tree(c) for c in categories]
 
+# ---------- PDF Report ----------
+
+@router.get("/report/{aid}/pdf")
+def download_pdf(
+    aid: int,
+    tenant_id: int = Depends(get_current_tenant_id),
+    db: Session = Depends(get_db),
+):
+    a = db.query(Assessment).filter(
+        Assessment.id == aid, Assessment.tenant_id == tenant_id
+    ).first()
+    if not a:
+        raise HTTPException(404, "Assessment not found")
+
+    items = []
+    for item in a.items:
+        ind = db.get(StdIndicator, item.indicator_id)
+        cat = db.get(StdCategory, ind.category_id) if ind else None
+        items.append({
+            "name": ind.name if ind else "?",
+            "category": cat.name if cat else "?",
+            "standard": (ind.standard_value or "") + (ind.unit or ""),
+            "actual": item.actual_value or "-",
+            "ok": item.is_compliant,
+            "score": item.score or 0,
+        })
+
+    compliant = sum(1 for i in items if i["ok"])
+    total = len(items)
+
+    html = f"""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+<style>
+body{{font-family:"Microsoft YaHei",sans-serif;padding:40px;color:#1e293b}}
+h1{{text-align:center;font-size:22px;margin-bottom:4px}}
+.sub{{text-align:center;color:#64748b;font-size:13px;margin-bottom:20px}}
+.stats{{display:flex;gap:12px;margin-bottom:20px}}
+.stat{{flex:1;text-align:center;padding:12px;border-radius:6px;background:#f1f5f9}}
+.stat .v{{font-size:24px;font-weight:700}}
+.stat .l{{font-size:11px;color:#64748b}}
+table{{width:100%;border-collapse:collapse;font-size:13px}}
+th{{background:#f1f5f9;padding:8px;text-align:left;border-bottom:2px solid #e2e8f0}}
+td{{padding:8px;border-bottom:1px solid #e2e8f0}}
+.pass{{color:#16a34a;font-weight:600}}
+.fail{{color:#dc2626;font-weight:600}}
+</style></head><body>
+<h1>{a.name}</h1>
+<p class="sub">评级周期: {a.rating_cycle or '-'} | 状态: {a.status}</p>
+<div class="stats">
+<div class="stat"><div class="v" style="color:{'#16a34a' if float(a.total_score or 0)>=60 else '#dc2626'}">{a.total_score or 0}</div><div class="l">总分</div></div>
+<div class="stat"><div class="v" style="color:#3b82f6">{len(compliant) if isinstance(compliant, list) else compliant}/{total}</div><div class="l">达标率</div></div>
+<div class="stat"><div class="v">{total}</div><div class="l">总指标</div></div>
+</div>
+<table><tr><th>分类</th><th>指标</th><th>标准值</th><th>实际值</th><th>结果</th></tr>
+"""
+    for i in items:
+        cls = "pass" if i["ok"] else "fail"
+        tag = "达标" if i["ok"] else "未达标"
+        html += f"<tr><td>{i['category']}</td><td>{i['name']}</td><td>{i['standard']}</td><td style='{cls}'>{i['actual']}</td><td class='{cls}'>{tag}</td></tr>"
+    html += "</table></body></html>"
+
+    try:
+        from weasyprint import HTML
+        from io import BytesIO
+        from fastapi.responses import StreamingResponse
+        buf = BytesIO()
+        HTML(string=html).write_pdf(buf)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/pdf",
+                                 headers={"Content-Disposition": f"attachment; filename=report_{aid}.pdf"})
+    except Exception:
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(content=html)
+
+
 # ---------- History Comparison ----------
 
 @router.get("/compare/{dept_id}")

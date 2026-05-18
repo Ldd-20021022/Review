@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import List, Optional
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Integer, Text, Numeric, Boolean, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import String, Integer, Text, Numeric, Boolean, Date, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
@@ -23,6 +23,7 @@ class Assessment(Base):
     total_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True, default=None)
     status: Mapped[str] = mapped_column(String(20), default="draft")
     submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    deadline: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     items: Mapped[List["AssessmentItem"]] = relationship(back_populates="assessment", lazy="selectin")

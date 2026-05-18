@@ -101,6 +101,9 @@ export default defineComponent({
         @click="goEdit(report.assessment_id)">✏️ 修改数据</el-button>
       <el-button v-if="report.status === 'rejected' || report.status === 'draft'"
         type="primary" @click="handleResubmit" :loading="resubmitting">📤 提交审核</el-button>
+      <a :href="'http://localhost:8000/api/hospital-ratings/report/' + report.assessment_id + '/pdf'" target="_blank" style="text-decoration:none">
+        <el-button>📄 下载 PDF</el-button>
+      </a>
       <el-button @click="exportCSV">📥 导出 CSV</el-button>
       <el-button @click="window.print()">🖨️ 打印</el-button>
     </div>
