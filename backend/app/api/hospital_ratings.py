@@ -1,7 +1,7 @@
 from typing import List, Optional
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -427,6 +427,158 @@ td{{padding:8px;border-bottom:1px solid #e2e8f0}}
     except Exception:
         from fastapi.responses import HTMLResponse
         return HTMLResponse(content=html)
+
+
+# ---------- Excel Import Assessment Data ----------
+
+@router.post("/import-data")
+def import_assessment_data(
+    file: UploadFile = File(...),
+    rating_cycle: str = "2025年度",
+    tenant_id: int = Depends(get_current_tenant_id),
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+    ut=Depends(get_current_user_tenant),
+):
+    """Excel 批量导入科室评估数据。列: indicator_code | actual_value | remark"""
+    dept_id = ut.dept_id
+    if not dept_id:
+        raise HTTPException(400, "No department context")
+
+    hg_set = db.query(StandardSet).filter(StandardSet.type == "hospital_grade").first()
+    if not hg_set:
+        raise HTTPException(400, "No hospital grade standard set found")
+
+    dept = db.get(Department, dept_id)
+    if not dept:
+        raise HTTPException(404, "Department not found")
+
+    # Parse Excel
+    import tempfile, os
+    suffix = os.path.splitext(file.filename or "data.xlsx")[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(file.file.read())
+        tmp_path = tmp.name
+
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(tmp_path)
+        ws = wb.active
+        rows = list(ws.iter_rows(min_row=2, values_only=True))  # skip header
+    finally:
+        os.unlink(tmp_path)
+
+    # Create assessment
+    a = Assessment(
+        tenant_id=tenant_id,
+        name=f"{dept.name} - {rating_cycle}三甲评级",
+        target_level=1, department_id=dept_id,
+        rating_cycle=rating_cycle, submitter_id=user.id,
+        set_id=hg_set.id, status="draft",
+    )
+    db.add(a)
+    db.flush()
+
+    count = 0
+    for row in rows:
+        if not row or not row[0]:
+            continue
+        code = str(row[0]).strip()
+        actual = str(row[1]).strip() if len(row) > 1 and row[1] else None
+        remark = str(row[2]).strip() if len(row) > 2 and row[2] else None
+
+        ind = db.query(StdIndicator).filter(StdIndicator.code == code).first()
+        if not ind:
+            continue
+
+        is_compliant = None
+        score = None
+        if actual and ind.standard_value and ind.indicator_type:
+            result = check_compliance(actual, ind.standard_value, ind.indicator_type)
+            is_compliant = result["is_compliant"]
+            score = result["score"]
+
+        db.add(AssessmentItem(
+            assessment_id=a.id, indicator_id=ind.id,
+            actual_value=actual, is_compliant=is_compliant,
+            score=score, gap_note=remark,
+            updated_at=datetime.now(timezone.utc) if actual else None,
+        ))
+        count += 1
+
+    # Calculate total score
+    items = a.items
+    tw, total_w = 0, 0
+    for item in items:
+        ind = db.get(StdIndicator, item.indicator_id)
+        if ind and item.score is not None and ind.weight:
+            tw += item.score * float(ind.weight) / 100
+            total_w += float(ind.weight)
+    a.total_score = round(tw / total_w * 100, 2) if total_w else 0
+
+    _log(db, user.id, tenant_id, "import", "assessment", a.id, f"Excel import {count} items score:{a.total_score}")
+    db.commit()
+
+    return {"ok": True, "assessment_id": a.id, "count": count, "total_score": float(a.total_score) if a.total_score else 0}
+
+
+# ---------- Copy from previous cycle ----------
+
+@router.post("/copy-previous")
+def copy_previous_cycle(
+    rating_cycle: str = "2025年度",
+    tenant_id: int = Depends(get_current_tenant_id),
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+    ut=Depends(get_current_user_tenant),
+):
+    """复制上一周期的评估数据作为新评估的起点"""
+    dept_id = ut.dept_id
+    if not dept_id:
+        raise HTTPException(400, "No department context")
+
+    prev = db.query(Assessment).filter(
+        Assessment.tenant_id == tenant_id,
+        Assessment.department_id == dept_id,
+    ).order_by(Assessment.created_at.desc()).first()
+
+    if not prev:
+        raise HTTPException(404, "No previous assessment to copy")
+
+    hg_set = db.query(StandardSet).filter(StandardSet.type == "hospital_grade").first()
+    dept = db.get(Department, dept_id)
+
+    a = Assessment(
+        tenant_id=tenant_id,
+        name=f"{dept.name} - {rating_cycle}三甲评级",
+        target_level=1, department_id=dept_id,
+        rating_cycle=rating_cycle, submitter_id=user.id,
+        set_id=hg_set.id, status="draft",
+    )
+    db.add(a)
+    db.flush()
+
+    copied = 0
+    for prev_item in prev.items:
+        ind = db.get(StdIndicator, prev_item.indicator_id)
+        if not ind:
+            continue
+        actual = prev_item.actual_value
+        is_compliant = None
+        score = None
+        if actual and ind.standard_value and ind.indicator_type:
+            result = check_compliance(actual, ind.standard_value, ind.indicator_type)
+            is_compliant = result["is_compliant"]
+            score = result["score"]
+        db.add(AssessmentItem(
+            assessment_id=a.id, indicator_id=ind.id,
+            actual_value=actual, is_compliant=is_compliant,
+            score=score, gap_note=prev_item.gap_note,
+        ))
+        copied += 1
+
+    db.commit()
+    return {"ok": True, "assessment_id": a.id, "copied": copied}
 
 
 # ---------- History Comparison ----------

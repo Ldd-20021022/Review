@@ -35,3 +35,17 @@ export function getStandards() {
 export function compareHistory(deptId) {
   return get('/api/hospital-ratings/compare/' + deptId)
 }
+
+export function importAssessmentData(file, cycle) {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('rating_cycle', cycle)
+  const token = localStorage.getItem('token')
+  return fetch('http://localhost:8000/api/hospital-ratings/import-data?' + new URLSearchParams({rating_cycle: cycle}), {
+    method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd,
+  }).then(r => r.json())
+}
+
+export function copyPreviousCycle(cycle) {
+  return post('/api/hospital-ratings/copy-previous', { rating_cycle: cycle })
+}

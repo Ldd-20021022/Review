@@ -1,7 +1,7 @@
 import { defineComponent, ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from '/src/shim/element-plus.js'
-import { getStandards, submitRating, updateRating, getReport } from '../../api/hospital-rating.js'
+import { getStandards, submitRating, updateRating, getReport, importAssessmentData, copyPreviousCycle } from '../../api/hospital-rating.js'
 import { checkCompliance, calcScore } from '../../utils/compliance.js'
 
 const LS_KEY = 'hr_draft'
@@ -17,6 +17,7 @@ export default defineComponent({
     const activeNames = ref([])
     const submitting = ref(false)
     const saving = ref(false)
+    const importing = ref(false)
     const cycle = ref('2025年度')
     const editId = ref(null)
     const lastSaved = ref('')
@@ -42,6 +43,30 @@ export default defineComponent({
 
     function clearLocal() { localStorage.removeItem(LS_KEY); lastSaved.value = '' }
     function hasLocalDraft() { return !!localStorage.getItem(LS_KEY) }
+
+    async function handleFileImport(e) {
+      const file = e.target.files?.[0]
+      if (!file) return
+      importing.value = true
+      try {
+        const res = await importAssessmentData(file, cycle.value)
+        ElMessage.success(`导入完成: ${res.count} 项, 总分 ${res.total_score}`)
+        router.push('/hospital-rating/reports?assessment=' + res.assessment_id)
+      } catch (err) {
+        ElMessage.error('导入失败: ' + (err.message || err))
+      } finally { importing.value = false }
+      e.target.value = ''
+    }
+
+    async function handleCopyPrevious() {
+      try {
+        const res = await copyPreviousCycle(cycle.value)
+        ElMessage.success(`已复制 ${res.copied} 项数据`)
+        router.push('/hospital-rating/reports?assessment=' + res.assessment_id)
+      } catch (err) {
+        ElMessage.error('复制失败: ' + (err.message || err))
+      }
+    }
 
     const cycleOptions = [
       '2024年度','2025年度','2026年度',
@@ -199,8 +224,9 @@ export default defineComponent({
     onUnmounted(() => { if (autoSaveTimer) clearInterval(autoSaveTimer) })
 
     return {
-      categories, formValues, formRemarks, activeNames, submitting, saving, cycle, cycleOptions, editId,
+      categories, formValues, formRemarks, activeNames, submitting, saving, importing, cycle, cycleOptions, editId,
       allIndicators, stats, fillProgress, lastSaved, checkCompliance, handleSubmit, handleSaveDraft, validateValue,
+      handleFileImport, handleCopyPrevious,
     }
   },
   template: `
@@ -211,6 +237,11 @@ export default defineComponent({
       <el-select v-model="cycle" style="width:140px" size="small" :disabled="!!editId">
         <el-option v-for="o in cycleOptions" :key="o" :label="o" :value="o" />
       </el-select>
+      <label style="cursor:pointer;margin:0">
+        <el-button :loading="importing" size="small">📥 Excel导入</el-button>
+        <input type="file" accept=".xlsx,.xls" style="display:none" @change="handleFileImport" />
+      </label>
+      <el-button @click="handleCopyPrevious" size="small" v-if="!editId">📋 复制上期</el-button>
       <el-button @click="handleSaveDraft" :loading="saving">💾 保存草稿</el-button>
       <el-button type="primary" @click="handleSubmit" :loading="submitting">
         {{ editId ? '📤 重新提交审核' : '📤 提交审核' }}
