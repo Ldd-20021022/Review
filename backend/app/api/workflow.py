@@ -19,10 +19,13 @@ router = APIRouter(prefix="/api/workflow", tags=["workflow"])
 def create_pdca(
     assessment_id: int = 0,
     db: Session = Depends(get_db),
-    _=Depends(get_current_user_tenant),
+    ut=Depends(get_current_user_tenant),
 ):
     """从未达标指标自动生成 PDCA 改进项目"""
-    a = db.get(Assessment, assessment_id)
+    a = db.query(Assessment).filter(
+        Assessment.id == assessment_id,
+        Assessment.tenant_id == ut.tenant_id,
+    ).first()
     if not a: raise HTTPException(404, "Assessment not found")
     items = [it for it in a.items if it.is_compliant is False]
     created = 0
@@ -53,7 +56,9 @@ def list_pdca(
     db: Session = Depends(get_db),
     ut=Depends(get_current_user_tenant),
 ):
-    q = db.query(PDCAProject)
+    q = db.query(PDCAProject).join(Assessment).filter(
+        Assessment.tenant_id == ut.tenant_id
+    )
     if assessment_id: q = q.filter(PDCAProject.assessment_id == assessment_id)
     if ut.dept_id: q = q.filter(PDCAProject.dept_id == ut.dept_id)
     return [{"id": p.id, "title": p.title, "current_value": p.current_value,
@@ -71,8 +76,16 @@ class PDCAUpdate(BaseModel):
 
 
 @router.put("/pdca/{pid}")
-def update_pdca(pid: int, body: PDCAUpdate, db: Session = Depends(get_db)):
-    p = db.get(PDCAProject, pid)
+def update_pdca(
+    pid: int,
+    body: PDCAUpdate,
+    db: Session = Depends(get_db),
+    ut=Depends(get_current_user_tenant),
+):
+    p = db.query(PDCAProject).join(Assessment).filter(
+        PDCAProject.id == pid,
+        Assessment.tenant_id == ut.tenant_id,
+    ).first()
     if not p: raise HTTPException(404, "Not found")
     p.phase = body.phase
     phase_map = {"plan": "plan_detail", "do": "do_detail", "check": "check_detail", "act": "act_detail"}

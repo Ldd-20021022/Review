@@ -16,7 +16,7 @@ class Regulation(Base):
     content: Mapped[str] = mapped_column(Text)               # 条文内容
     interpretation: Mapped[str] = mapped_column(Text, default="")  # 官方解读
     keywords: Mapped[str] = mapped_column(String(500), default="")  # 搜索关键词
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class RectifyCase(Base):
@@ -32,4 +32,4 @@ class RectifyCase(Base):
     result: Mapped[str] = mapped_column(Text)                  # 整改效果
     duration: Mapped[str] = mapped_column(String(50))          # 整改周期
     difficulty: Mapped[str] = mapped_column(String(20), default="medium")  # easy/medium/hard
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

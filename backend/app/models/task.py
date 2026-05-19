@@ -22,8 +22,8 @@ class RectifyTask(Base):
     priority: Mapped[str] = mapped_column(String(10), default="medium")
     due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="pending")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     assessment: Mapped["Assessment"] = relationship(back_populates="tasks")
     indicator: Mapped["StdIndicator"] = relationship()
@@ -39,7 +39,7 @@ class TaskComment(Base):
     task_id: Mapped[int] = mapped_column(ForeignKey("rectify_tasks.id"))
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     content: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     task: Mapped["RectifyTask"] = relationship(back_populates="comments")
     user: Mapped["User"] = relationship()

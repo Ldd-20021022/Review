@@ -23,7 +23,6 @@ fs.copyFileSync('public/manifest.json', 'dist/manifest.json');
 fs.copyFileSync('src/shim/vue.js', 'dist/shim-vue.js');
 fs.copyFileSync('src/shim/vue-router.js', 'dist/shim-vue-router.js');
 fs.copyFileSync('src/shim/element-plus.js', 'dist/shim-element-plus.js');
-fs.copyFileSync('src/shim/pinia.js', 'dist/shim-pinia.js');
 
 esbuild.build({
   entryPoints: ['src/main.js'],

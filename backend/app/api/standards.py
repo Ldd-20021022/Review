@@ -40,7 +40,7 @@ def create_category(
     db.add(c)
     db.commit()
     db.refresh(c)
-    return CategoryInfo.from_orm(c)
+    return CategoryInfo.model_validate(c)
 
 
 @router.put("/categories/{cid}", response_model=CategoryInfo)
@@ -57,7 +57,7 @@ def update_category(
         setattr(c, k, v)
     db.commit()
     db.refresh(c)
-    return CategoryInfo.from_orm(c)
+    return CategoryInfo.model_validate(c)
 
 
 @router.delete("/categories/{cid}")

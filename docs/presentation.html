@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三甲医院评级系统 — 产品介绍</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:#0f172a;color:#e2e8f0;overflow:hidden}
+.slides{width:100vw;height:100vh;position:relative}
+.slide{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;opacity:0;transition:opacity .5s;pointer-events:none}
+.slide.active{opacity:1;pointer-events:auto}
+.slide h1{font-size:42px;font-weight:800;margin-bottom:16px;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.slide h2{font-size:28px;font-weight:700;margin-bottom:24px;color:#e2e8f0}
+.slide p{font-size:16px;color:#94a3b8;line-height:1.8;max-width:800px;text-align:center}
+.slide .sub{font-size:14px;color:#64748b;margin-top:12px}
+.grid{display:grid;gap:16px;width:100%;max-width:1000px}
+.grid2{grid-template-columns:1fr 1fr}
+.grid3{grid-template-columns:1fr 1fr 1fr}
+.grid4{grid-template-columns:repeat(4,1fr)}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:24px;text-align:center;transition:transform .2s}
+.card:hover{transform:translateY(-2px)}
+.card .icon{font-size:36px;margin-bottom:12px}
+.card h3{font-size:16px;margin-bottom:8px;color:#e2e8f0}
+.card p{font-size:13px;color:#94a3b8;line-height:1.6;text-align:center}
+.tag{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;margin:4px}
+.tag-blue{background:#1e3a5f;color:#60a5fa}
+.tag-green{background:#14532d;color:#4ade80}
+.tag-red{background:#7f1d1d;color:#f87171}
+.tag-yellow{background:#713f12;color:#fbbf24}
+.stat{text-align:center}
+.stat .num{font-size:48px;font-weight:800;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat .label{font-size:14px;color:#94a3b8;margin-top:4px}
+.nav{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:100}
+.nav button{width:40px;height:40px;border-radius:50%;border:1px solid #334155;background:#1e293b;color:#94a3b8;cursor:pointer;font-size:16px;transition:all .2s}
+.nav button:hover{background:#334155;color:#fff}
+.nav button.active{background:#3b82f6;border-color:#3b82f6;color:#fff}
+.page-num{position:fixed;top:24px;right:32px;font-size:13px;color:#64748b;z-index:100}
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center}
+.flow-step{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 20px;font-size:14px;white-space:nowrap}
+.flow-arrow{color:#64748b;font-size:20px}
+@media print{body{background:#fff;color:#000}.slide{position:relative;page-break-after:always;opacity:1;pointer-events:auto;padding:40px}.nav,.page-num{display:none}.slide h1{-webkit-text-fill-color:#1e40af}.card{background:#f8fafc;border:1px solid #e2e8f0}}
+</style>
+</head>
+<body>
+
+<div class="slides" id="slides">
+  <!-- Slide 1: Title -->
+  <div class="slide active">
+    <div style="font-size:72px;margin-bottom:16px">🏥</div>
+    <h1>三甲医院评级系统</h1>
+    <p>基于《三级医院评审标准（2025年版）》国卫医政发〔2025〕4号<br>科学评审 · 持续改进 · 数据驱动</p>
+    <div class="sub" style="margin-top:32px">2025年6月 | v3.0</div>
+  </div>
+
+  <!-- Slide 2: Overview -->
+  <div class="slide">
+    <h2>📋 项目概述</h2>
+    <div class="grid grid2" style="max-width:900px">
+      <div class="card"><div class="icon">🎯</div><h3>核心目标</h3><p>帮助三级医院通过评审保级<br>帮助二级医院升级三级<br>全流程在线化管理</p></div>
+      <div class="card"><div class="icon">📊</div><h3>数据规模</h3><p>50个分类 · 227项指标<br>覆盖17个专业领域<br>基于2025版国家评审标准</p></div>
+      <div class="card"><div class="icon">👥</div><h3>用户角色</h3><p>院长 · 科室负责人<br>评审专家 · 系统管理员<br>多角色权限隔离</p></div>
+      <div class="card"><div class="icon">🔄</div><h3>核心流程</h3><p>数据填报 → 自动判定 → 院长审核<br>→ 退回整改 → 重新提交<br>→ 终审通过</p></div>
+    </div>
+  </div>
+
+  <!-- Slide 3: Stats -->
+  <div class="slide">
+    <h2>📊 系统规模</h2>
+    <div class="grid grid4" style="max-width:900px">
+      <div class="stat"><div class="num">28</div><div class="label">API 端点</div></div>
+      <div class="stat"><div class="num">227</div><div class="label">评审指标</div></div>
+      <div class="stat"><div class="num">50</div><div class="label">分类维度</div></div>
+      <div class="stat"><div class="num">10</div><div class="label">前端页面</div></div>
+    </div>
+    <div style="margin-top:32px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:800px">
+      <span class="tag tag-blue">Python FastAPI</span><span class="tag tag-green">Vue 3</span>
+      <span class="tag tag-yellow">Element Plus</span><span class="tag tag-blue">SQLAlchemy</span>
+      <span class="tag tag-green">SVG Charts</span><span class="tag tag-red">Docker</span>
+      <span class="tag tag-blue">PWA</span><span class="tag tag-yellow">暗色模式</span>
+      <span class="tag tag-green">AI 差距分析</span><span class="tag tag-blue">审计日志</span>
+      <span class="tag tag-red">限流锁定</span><span class="tag tag-yellow">SSE 通知</span>
+      <span class="tag tag-green">PDCA 改进</span><span class="tag tag-blue">HIS 对接</span>
+    </div>
+  </div>
+
+  <!-- Slide 4: Architecture -->
+  <div class="slide">
+    <h2>🏗️ 技术架构</h2>
+    <div class="grid grid2" style="max-width:900px">
+      <div class="card"><div class="icon">🖥️</div><h3>前端</h3><p>Vue 3 + Element Plus<br>SVG 可视化图表（零依赖）<br>PWA 离线支持 · 暗色模式<br>响应式布局 · 自动保存草稿</p></div>
+      <div class="card"><div class="icon">⚙️</div><h3>后端</h3><p>Python FastAPI<br>SQLAlchemy 2.0 ORM<br>JWT 认证 · 角色权限<br>限流 · 审计日志</p></div>
+      <div class="card"><div class="icon">🗄️</div><h3>数据层</h3><p>SQLite（开发）/ PostgreSQL（生产）<br>14 个数据模型<br>自动建表 · 种子数据</p></div>
+      <div class="card"><div class="icon">🐳</div><h3>部署</h3><p>Docker Compose 一键部署<br>Nginx 反向代理<br>前后端分离 · 健康检查</p></div>
+    </div>
+  </div>
+
+  <!-- Slide 5: Workflow -->
+  <div class="slide">
+    <h2>🔄 评审全流程</h2>
+    <div class="flow" style="margin-bottom:32px">
+      <div class="flow-step">📝 科室填报</div><div class="flow-arrow">→</div>
+      <div class="flow-step">🤖 自动判定</div><div class="flow-arrow">→</div>
+      <div class="flow-step">📤 提交审核</div><div class="flow-arrow">→</div>
+      <div class="flow-step">👨‍⚕️ 院长审批</div><div class="flow-arrow">→</div>
+      <div class="flow-step">✅ 通过 / ❌ 退回</div>
+    </div>
+    <div style="display:flex;gap:3px;align-items:center">
+      <div class="flow-arrow">↩️</div>
+      <div class="flow-step">✏️ 修改重提</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">🔄 PDCA 改进</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">📋 评审会议</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">🏁 终审通过</div>
+    </div>
+    <p style="margin-top:32px">支持：Excel批量导入 · 复制上期数据 · 本地草稿自动保存 · 批量审批</p>
+  </div>
+
+  <!-- Slide 6: Dashboard -->
+  <div class="slide">
+    <h2>📊 院长仪表盘</h2>
+    <div class="grid grid3" style="max-width:900px">
+      <div class="card"><div class="icon">📈</div><h3>统计总览</h3><p>全院均分 · 达标分布环形图<br>已达标/未达标/待提交<br>大字统计一目了然</p></div>
+      <div class="card"><div class="icon">🔴</div><h3>急需关注</h3><p>红色卡片标注退回/未提交科室<br>点击直达问题详情<br>问题优先呈现</p></div>
+      <div class="card"><div class="icon">📋</div><h3>科室对比表</h3><p>可排序 · 进度条可视化<br>批量选择 · 一键审批/退回<br>CSV 导出</p></div>
+      <div class="card"><div class="icon">📊</div><h3>分类达标率</h3><p>各分类进度条一览<br>红黄绿颜色区分<br>薄弱环节一眼定位</p></div>
+      <div class="card"><div class="icon">👤</div><h3>科室视角</h3><p>只看本科室数据<br>未达标项差距分析<br>实际值 vs 标准值对比</p></div>
+      <div class="card"><div class="icon">📱</div><h3>移动适配</h3><p>响应式布局<br>折叠侧边栏<br>手机端可用</p></div>
+    </div>
+  </div>
+
+  <!-- Slide 7: Data Entry -->
+  <div class="slide">
+    <h2>📋 数据填报</h2>
+    <div class="grid grid3" style="max-width:900px">
+      <div class="card"><div class="icon">📂</div><h3>折叠分类</h3><p>50 个分类折叠展示<br>每类显示权重和指标数<br>按需展开填写</p></div>
+      <div class="card"><div class="icon">✅</div><h3>实时判定</h3><p>输入即显示达标/未达标<br>实时计算预估总分<br>进度条显示填写进度</p></div>
+      <div class="card"><div class="icon">📥</div><h3>批量导入</h3><p>Excel 一键导入<br>复制上期数据<br>HIS 系统自动对接</p></div>
+      <div class="card"><div class="icon">💾</div><h3>自动保存</h3><p>每 30 秒自动保存到本地<br>刷新/关闭不丢数据<br>再次打开提示恢复</p></div>
+      <div class="card"><div class="icon">📤</div><h3>草稿 + 提交</h3><p>支持保存草稿分次填写<br>227 项指标从容完成<br>提交后进入审核流程</p></div>
+      <div class="card"><div class="icon">🔍</div><h3>搜索过滤</h3><p>按名称/编码搜索指标<br>快速定位目标项<br>填写效率翻倍</p></div>
+    </div>
+  </div>
+
+  <!-- Slide 8: AI -->
+  <div class="slide">
+    <h2>🤖 AI 智能增强</h2>
+    <div class="grid grid2" style="max-width:900px">
+      <div class="card"><div class="icon">📝</div><h3>AI 智能报告</h3><p>自动生成 Markdown 评审总结<br>分章节：总体情况 · 分类达标 · 急需整改 · 整改建议<br>异常数据自动检测标注</p></div>
+      <div class="card"><div class="icon">🔍</div><h3>差距分析</h3><p>按紧急/高优/一般排序<br>每项含整改建议 + 期限<br>规则引擎 + 知识库驱动</p></div>
+      <div class="card"><div class="icon">📚</div><h3>知识库</h3><p>评审标准法规原文 + 解读<br>整改案例库（问题→根因→措施→效果）<br>全文搜索</p></div>
+      <div class="card"><div class="icon">🔄</div><h3>PDCA 改进</h3><p>从未达标指标自动创建改进项目<br>Plan→Do→Check→Act 四阶段<br>责任人 + 截止日期</p></div>
+    </div>
+  </div>
+
+  <!-- Slide 9: Integration -->
+  <div class="slide">
+    <h2>🔗 系统集成</h2>
+    <div class="grid grid2" style="max-width:900px">
+      <div class="card"><div class="icon">🏥</div><h3>HIS/EMR 对接</h3><p>Webhook 自动拉取数据<br>无需手动填报<br>实时同步</p></div>
+      <div class="card"><div class="icon">📱</div><h3>扫码填报</h3><p>每科室生成专属二维码<br>手机扫码直达填报页<br>移动端审批</p></div>
+      <div class="card"><div class="icon">📤</div><h3>卫健委直报</h3><p>一键生成标准格式<br>JSON/CSV/PDF 导出<br>对接省级平台</p></div>
+      <div class="card"><div class="icon">🔔</div><h3>消息通知</h3><p>站内信 + SSE 实时推送<br>企业微信/钉钉 Webhook<br>退回/通过即时通知</p></div>
+    </div>
+  </div>
+
+  <!-- Slide 10: Security -->
+  <div class="slide">
+    <h2>🔒 安全与质量</h2>
+    <div class="grid grid3" style="max-width:900px">
+      <div class="card"><div class="icon">🛡️</div><h3>安全加固</h3><p>JWT 认证 · 角色权限隔离<br>API 限流（100次/分钟）<br>登录失败锁定（5次/15分钟）</p></div>
+      <div class="card"><div class="icon">📝</div><h3>审计追踪</h3><p>所有操作自动记录<br>谁在什么时间做了什么<br>不可篡改</p></div>
+      <div class="card"><div class="icon">🧪</div><h3>自动化测试</h3><p>20 项 pytest 核心流程测试<br>覆盖认证/填报/审核/AI<br>构建即测试</p></div>
+      <div class="card"><div class="icon">🐳</div><h3>一键部署</h3><p>Docker Compose<br>前后端 + Nginx<br>健康检查 · 自动重启</p></div>
+      <div class="card"><div class="icon">📊</div><h3>模拟抽检</h3><p>随机抽取科室+指标<br>生成检查清单<br>评审预演</p></div>
+      <div class="card"><div class="icon">🎨</div><h3>体验优化</h3><p>暗色模式 · PWA 离线<br>响应式布局 · 快捷键<br>自定义仪表盘布局</p></div>
+    </div>
+  </div>
+
+  <!-- Slide 11: Standards -->
+  <div class="slide">
+    <h2>📐 评审标准覆盖</h2>
+    <div class="grid grid3" style="max-width:900px">
+      <div class="card"><h3>前置要求</h3><p style="margin-top:8px">25 项一票否决指标<br>依法执业 · 功能定位<br>安全管理 · 公益性</p></div>
+      <div class="card"><h3>资源配置</h3><p style="margin-top:8px">床位/人员/科室/设备/经济<br>CMI 病例组合指数<br>四级手术占比</p></div>
+      <div class="card"><h3>医疗质量</h3><p style="margin-top:8px">死亡/重返/并发症<br>临床路径 · 核心制度<br>诊断编码正确率</p></div>
+      <div class="card"><h3>重点专业</h3><p style="margin-top:8px">麻醉 · ICU · 急诊 · 检验<br>病理 · 输血 · 影像<br>肿瘤 · 感染性疾病</p></div>
+      <div class="card"><h3>单病种</h3><p style="margin-top:8px">心梗 · 心衰 · 卒中<br>关节置换 · 肺炎<br>冠心病 · 肿瘤</p></div>
+      <div class="card"><h3>管理保障</h3><p style="margin-top:8px">药事 · 护理 · 院感<br>患者安全 · 信息化<br>行风 · 后勤 · 妇幼</p></div>
+    </div>
+  </div>
+
+  <!-- Slide 12: Summary -->
+  <div class="slide">
+    <div style="font-size:64px;margin-bottom:16px">✅</div>
+    <h1>系统就绪</h1>
+    <div class="grid grid4" style="max-width:900px;margin-top:32px">
+      <div class="stat"><div class="num">28</div><div class="label">API 端点</div></div>
+      <div class="stat"><div class="num">227</div><div class="label">评审指标</div></div>
+      <div class="stat"><div class="num">20</div><div class="label">自动化测试</div></div>
+      <div class="stat"><div class="num">🐳</div><div class="label">Docker 就绪</div></div>
+    </div>
+    <div class="sub" style="margin-top:32px">docker compose up -d &nbsp;→&nbsp; 浏览器访问即用</div>
+  </div>
+</div>
+
+<div class="page-num" id="pagenum">1 / 12</div>
+
+<div class="nav" id="nav">
+  <button onclick="goTo(0)">1</button>
+  <button onclick="goTo(1)">2</button>
+  <button onclick="goTo(2)">3</button>
+  <button onclick="goTo(3)">4</button>
+  <button onclick="goTo(4)">5</button>
+  <button onclick="goTo(5)">6</button>
+  <button onclick="goTo(6)">7</button>
+  <button onclick="goTo(7)">8</button>
+  <button onclick="goTo(8)">9</button>
+  <button onclick="goTo(9)">10</button>
+  <button onclick="goTo(10)">11</button>
+  <button onclick="goTo(11)">12</button>
+</div>
+
+<script>
+let current = 0
+const slides = document.querySelectorAll('.slide')
+const navBtns = document.querySelectorAll('#nav button')
+const total = slides.length
+
+function goTo(i) {
+  slides[current].classList.remove('active')
+  navBtns[current].classList.remove('active')
+  current = ((i % total) + total) % total
+  slides[current].classList.add('active')
+  navBtns[current].classList.add('active')
+  document.getElementById('pagenum').textContent = `${current + 1} / ${total}`
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); goTo(current + 1) }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); goTo(current - 1) }
+  if (e.key === 'Home') { e.preventDefault(); goTo(0) }
+  if (e.key === 'End') { e.preventDefault(); goTo(total - 1) }
+})
+
+// Touch swipe
+let touchX = 0
+document.addEventListener('touchstart', e => { touchX = e.touches[0].clientX })
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - touchX
+  if (Math.abs(dx) > 60) goTo(dx > 0 ? current - 1 : current + 1)
+})
+
+navBtns[0].classList.add('active')
+</script>
+</body>
+</html>

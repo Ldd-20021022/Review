@@ -22,9 +22,9 @@ class Assessment(Base):
     set_id: Mapped[Optional[int]] = mapped_column(ForeignKey("standard_sets.id"), nullable=True)
     total_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True, default=None)
     status: Mapped[str] = mapped_column(String(20), default="draft")
-    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
     deadline: Mapped[Optional[datetime]] = mapped_column(Date, nullable=True, default=None)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     items: Mapped[List["AssessmentItem"]] = relationship(back_populates="assessment", lazy="selectin")
     snapshots: Mapped[List["Snapshot"]] = relationship(back_populates="assessment", lazy="selectin")
@@ -43,7 +43,7 @@ class AssessmentItem(Base):
     is_compliant: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True, default=None)
     score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
     gap_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     assessment: Mapped["Assessment"] = relationship(back_populates="items")
     indicator: Mapped["StdIndicator"] = relationship()

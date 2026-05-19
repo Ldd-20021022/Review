@@ -15,7 +15,7 @@ class Tenant(Base):
     name: Mapped[str] = mapped_column(String(200))
     contact: Mapped[Optional[str]] = mapped_column(String(100), default=None)
     status: Mapped[str] = mapped_column(String(20), default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     user_links: Mapped[List["UserTenant"]] = relationship(back_populates="tenant", lazy="selectin")
     departments: Mapped[List["Department"]] = relationship(back_populates="tenant", lazy="selectin")

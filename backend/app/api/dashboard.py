@@ -31,8 +31,8 @@ def director_dashboard(
 
     # 科室负责人只看自己科室
     is_manager = ut.role in ('admin', 'director')
-    if ut.dept_id:
-        q = q.filter(Assessment.department_id == ut.dept_id)
+    if not is_manager and ut.dept_id:
+        assessments = [a for a in assessments if a.department_id == ut.dept_id]
 
     depts = db.query(Department).filter(Department.tenant_id == tenant_id).all()
     if not is_manager and ut.dept_id:

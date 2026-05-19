@@ -1,5 +1,50 @@
+# ── Python ──
 __pycache__/
-*.pyc
-node_modules/
+*.py[cod]
+*.egg-info/
 dist/
+*.egg
+.eggs/
+venv/
+.venv/
+
+# ── Node / Frontend ──
+node_modules/
+frontend/dist/
+
+# ── Database ──
+*.db
+*.sqlite3
+
+# ── Environment ──
+.env
+.env.local
+.env.*.local
+
+# ── Secrets & SSL ──
+ssl/
+*.pem
+*.key
+*.crt
+
+# ── Uploads / Generated ──
+pdf_output/
+backups/
+*.log
+
+# ── IDE ──
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── OS ──
 .DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── Test artifacts ──
+.pytest_cache/
+test_findings/
+run_comprehensive_tests.py

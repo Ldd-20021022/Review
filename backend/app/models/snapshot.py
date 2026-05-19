@@ -15,7 +15,7 @@ class Snapshot(Base):
     assessment_id: Mapped[int] = mapped_column(ForeignKey("assessments.id"))
     version: Mapped[str] = mapped_column(String(10))
     total_score: Mapped[float] = mapped_column(Float)
-    locked_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    locked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     assessment: Mapped["Assessment"] = relationship(back_populates="snapshots")
     items: Mapped[List["SnapshotItem"]] = relationship(back_populates="snapshot", lazy="selectin")

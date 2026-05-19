@@ -15,7 +15,7 @@ class ReviewRecord(Base):
     reviewer_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     action: Mapped[str] = mapped_column(String(20))  # "approved" / "rejected"
     feedback: Mapped[str] = mapped_column(Text, default="")
-    reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     assessment: Mapped["Assessment"] = relationship(back_populates="reviews")
     reviewer: Mapped["User"] = relationship()

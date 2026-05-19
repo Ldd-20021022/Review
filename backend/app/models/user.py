@@ -16,7 +16,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     name: Mapped[str] = mapped_column(String(100))
     is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     tenant_links: Mapped[List["UserTenant"]] = relationship(back_populates="user", lazy="selectin")
 
@@ -30,7 +30,7 @@ class UserTenant(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"))
     role: Mapped[str] = mapped_column(String(20))
     dept_id: Mapped[Optional[int]] = mapped_column(ForeignKey("departments.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     user: Mapped["User"] = relationship(back_populates="tenant_links")
     tenant: Mapped["Tenant"] = relationship(back_populates="user_links")

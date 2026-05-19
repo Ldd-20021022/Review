@@ -25,7 +25,7 @@ class PDCAProject(Base):
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active")  # active/completed
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class ReviewMeeting(Base):
@@ -44,4 +44,4 @@ class ReviewMeeting(Base):
     votes_reject: Mapped[int] = mapped_column(Integer, default=0)       # 反对票
     votes_abstain: Mapped[int] = mapped_column(Integer, default=0)      # 弃权票
     recorder_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

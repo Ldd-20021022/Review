@@ -14,4 +14,4 @@ class AuditLog(Base):
     target_type: Mapped[str] = mapped_column(String(50))  # assessment/standard/user
     target_id: Mapped[int] = mapped_column(Integer, nullable=True)
     detail: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
