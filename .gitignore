@@ -48,3 +48,11 @@ Desktop.ini
 .pytest_cache/
 test_findings/
 run_comprehensive_tests.py
+_audit.py
+_final_audit.py
+
+# ── Logs ──
+logs/
+
+# ── Claude ──
+.claude/
