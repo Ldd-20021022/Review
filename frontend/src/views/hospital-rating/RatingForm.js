@@ -122,8 +122,13 @@ export default defineComponent({
     })
 
     async function fetchStandards() {
-      categories.value = await getStandards() || []
-      activeNames.value = categories.value.map(c => String(c.id))
+      try {
+        categories.value = await getStandards() || []
+        activeNames.value = categories.value.map(c => String(c.id))
+      } catch (e) {
+        ElMessage.error('加载标准库失败: ' + (e.message || '网络错误'))
+        categories.value = []
+      }
     }
 
     async function loadEditData(id) {
@@ -166,10 +171,13 @@ export default defineComponent({
     function validateValue(val, ind) {
       if (!val || val === '') return null
       if (ind.indicator_type === 'yesno') return null
-      const cleaned = String(val).replace('%', '').replace(':', '').replace(' ','').trim()
-      if (cleaned === '') return null
-      if (isNaN(parseFloat(cleaned))) return '请输入有效数字'
-      return null
+      try {
+        const extracted = _extractNumber(String(val))
+        if (isNaN(extracted)) return '请输入有效数字'
+        return null
+      } catch (_) {
+        return '请输入有效数字'
+      }
     }
 
     // Compute placeholder text based on indicator type

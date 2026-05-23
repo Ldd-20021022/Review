@@ -1,4 +1,4 @@
-import { defineComponent, ref, onMounted, computed } from 'vue'
+import { defineComponent, ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from '/src/shim/element-plus.js'
 import { useAuthStore } from '../../stores/auth.js'
@@ -25,6 +25,8 @@ export default defineComponent({
     const autoRefresh = ref(true)
     let refreshTimer = null
     const refreshing = ref(false)
+    const sortKey = ref('score')
+    const sortAsc = ref(true)
 
     function updateTimestamp() { lastUpdated.value = new Date().toLocaleTimeString('zh-CN') }
 
@@ -170,14 +172,19 @@ export default defineComponent({
     }
 
     async function handleApprove(row) {
-      await ElMessageBox.confirm(`确认通过【${row.name}】？`, '通过', { type: 'success' })
-      try { await approveRating(row.assessment_id); ElMessage.success('已通过'); await fetch() } catch (e) { ElMessage.error('失败: ' + e.message) }
+      try {
+        await ElMessageBox.confirm(`确认通过【${row.name}】？`, '通过', { type: 'success' })
+        await approveRating(row.assessment_id); ElMessage.success('已通过'); await fetch()
+      } catch (e) {
+        if (e !== 'cancel' && e?.message !== 'cancel') ElMessage.error('失败: ' + (e?.message || ''))
+      }
     }
 
     async function batchApprove() {
       const ids = [...selected.value]
       if (ids.length === 0) { ElMessage.warning('请选择科室'); return }
-      await ElMessageBox.confirm(`批量通过${ids.length}个科室？`, '批量通过', { type: 'success' })
+      try { await ElMessageBox.confirm(`批量通过${ids.length}个科室？`, '批量通过', { type: 'success' }) }
+      catch (_) { return }
       batchProcessing.value = true; let ok = 0
       for (const id of ids) { try { await approveRating(id); ok++ } catch (_) {} }
       ElMessage.success(`已通过${ok}/${ids.length}`); clearSelection(); batchProcessing.value = false; await fetch()
@@ -253,12 +260,15 @@ export default defineComponent({
       for (const d of depts) rows.push([d.name, d.rating_cycle||'-', d.score??'-', statusMap[d.status]||d.status, d.non_compliant_count||0])
       const csv = rows.map(r => r.map(c => '"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n')
       const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'})
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='全院评级.csv'; a.click()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download='全院评级.csv'; a.click()
+      URL.revokeObjectURL(url)
     }
 
     const statusMap = { approved: '✅已通过', rejected: '❌已退回', submitted: '📝待审核', revising: '🔄整改中', draft: '📋草稿', not_submitted: '📋未提交' }
 
     onMounted(() => { fetch(); fetchRecentLogs(); startAutoRefresh(); updateTimestamp() })
+    onUnmounted(() => { if (refreshTimer) clearInterval(refreshTimer) })
 
     return {
       dashboard, loading, cycle, rejectDialog, rejectForm, rejecting, isManager, selected, batchProcessing, deptReport,
@@ -267,7 +277,7 @@ export default defineComponent({
       batchApprove, exportCSV, toggleSort, statusMap,
       aiDiagnosing, aiDiagnosis, aiDiagnosisProgress, runAIDiagnosis, router,
       recentLogs, logsLoading, fetchRecentLogs, actionLabelMap, fmtLogTime,
-      lastUpdated, autoRefresh, refreshing, toggleAutoRefresh, sortKey, sortAsc,
+      lastUpdated, autoRefresh, refreshing, toggleAutoRefresh,
     }
   },
   template: `

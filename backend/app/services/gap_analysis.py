@@ -35,40 +35,7 @@ DEFAULT_SUGGESTION = {
 }
 
 
-_UNIT_CHARS_GAP = set("张个起元例人次名次床比例率‰天日月年小时厘米毫升升毫摩尔分秒点钟件种项科处所级类组等甲乙丙丁")
-_UNIT_MULTIPLIERS_GAP = {"万": 10_000, "亿": 100_000_000, "千": 1_000}
-
-
-def _extract_number(value: str) -> float:
-    """从带单位的字符串中提取数字值（与 compliance.py 对齐）。"""
-    v = str(value)
-    multiplier = 1.0
-
-    for unit, mult in _UNIT_MULTIPLIERS_GAP.items():
-        if unit in v:
-            multiplier = mult
-            v = v.replace(unit, "")
-            break
-
-    v = v.replace("≤", "").replace("≥", "").replace("<=", "").replace(">=", "")
-    v = v.replace("=", "").replace(">", "").replace("<", "").replace(" ", "")
-
-    if ":" in v:
-        parts = v.split(":")
-        first = "".join(c for c in parts[0] if c not in _UNIT_CHARS_GAP)
-        second = "".join(c for c in parts[1] if c not in _UNIT_CHARS_GAP)
-        try:
-            v = str(float(second) / float(first))
-        except (ValueError, ZeroDivisionError):
-            v = parts[0]
-
-    v = v.replace("%", "").replace("‰", "")
-    v = "".join(c for c in v if c not in _UNIT_CHARS_GAP)
-    v = v.rstrip("/").rstrip("-").rstrip(".")
-    if not v:
-        v = "0"
-
-    return float(v) * multiplier
+from .compliance import _extract_number
 
 
 def _calc_gap(standard_value, actual_value, indicator_type):

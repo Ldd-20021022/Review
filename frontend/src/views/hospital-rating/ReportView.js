@@ -22,6 +22,24 @@ export default defineComponent({
     const aiReport = ref(null)
     const anomalies = ref([])
     const aiLoading = ref(false)
+    const pdfDownloading = ref(false)
+
+    async function downloadPdf() {
+      if (!report.value?.assessment_id) return
+      pdfDownloading.value = true
+      try {
+        const token = localStorage.getItem('token')
+        const r = await fetch(BASE_URL + '/api/hospital-ratings/report/' + report.value.assessment_id + '/pdf', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        })
+        if (!r.ok) throw new Error('下载失败')
+        const blob = await r.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a'); a.href = url; a.download = '评级报告-' + report.value.assessment_id + '.pdf'; a.click()
+        URL.revokeObjectURL(url)
+      } catch (e) { ElMessage.error('PDF下载失败: ' + e.message) }
+      finally { pdfDownloading.value = false }
+    }
 
     async function fetchList() {
       list.value = await getMyRatings() || []
@@ -157,7 +175,7 @@ export default defineComponent({
 
     return { report, list, loading, selectedId, resubmitting, history, gapAnalysis, analyzing,
       aiReport, anomalies, aiLoading, aiProgress, radarHTML, BASE_URL,
-      fetchReport, handleResubmit, goEdit, exportCSV, fetchGapAnalysis, fetchAISummary, exportJSON, statusMap }
+      fetchReport, handleResubmit, goEdit, exportCSV, fetchGapAnalysis, fetchAISummary, exportJSON, downloadPdf, pdfDownloading, statusMap }
   },
   template: `
 <div>
@@ -168,9 +186,7 @@ export default defineComponent({
         @click="goEdit(report.assessment_id)">✏️ 修改数据</el-button>
       <el-button v-if="report.status === 'rejected' || report.status === 'draft'"
         type="primary" @click="handleResubmit" :loading="resubmitting">📤 提交审核</el-button>
-      <a :href="BASE_URL + '/api/hospital-ratings/report/' + report.assessment_id + '/pdf'" target="_blank" style="text-decoration:none">
-        <el-button>📄 下载 PDF</el-button>
-      </a>
+      <el-button @click="downloadPdf" :loading="pdfDownloading">📄 下载 PDF</el-button>
       <el-button @click="fetchAISummary" :loading="aiLoading" type="warning">🤖 AI 智能报告</el-button>
       <el-button @click="fetchGapAnalysis" :loading="analyzing" type="warning">🔍 差距分析</el-button>
       <el-button @click="exportJSON">📋 卫健委格式</el-button>

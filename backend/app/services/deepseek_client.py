@@ -18,7 +18,12 @@ def get_client() -> Optional[httpx.Client]:
     if not settings.DEEPSEEK_API_KEY:
         logger.warning("DEEPSEEK_API_KEY not configured, AI features disabled")
         return None
-    _client = httpx.Client(
+    _client = _build_client()
+    return _client
+
+
+def _build_client() -> httpx.Client:
+    return httpx.Client(
         base_url=settings.DEEPSEEK_BASE_URL,
         headers={
             "Authorization": "Bearer " + settings.DEEPSEEK_API_KEY,
@@ -26,7 +31,17 @@ def get_client() -> Optional[httpx.Client]:
         },
         timeout=httpx.Timeout(60.0),
     )
-    return _client
+
+
+def reset_client():
+    """Force recreation of httpx client (e.g. after connection errors or key rotation)."""
+    global _client
+    if _client is not None:
+        try:
+            _client.close()
+        except Exception:
+            pass
+    _client = None
 
 
 def chat(

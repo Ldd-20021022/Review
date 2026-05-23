@@ -1,4 +1,5 @@
 import os
+import html as _html
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
@@ -58,7 +59,7 @@ def _render_report_html(snapshot_id: int, db: Session) -> str:
         color = "#67c23a" if avg >= 80 else "#e6a23c" if avg >= 60 else "#f56c6c"
         cat_rows += f"""
         <tr>
-            <td>{cat}</td>
+            <td>{e(cat)}</td>
             <td>{len(scores)}</td>
             <td style="color:{color};font-weight:bold">{avg:.1f}%</td>
         </tr>"""
@@ -69,13 +70,17 @@ def _render_report_html(snapshot_id: int, db: Session) -> str:
         color = "#67c23a" if score >= 80 else "#e6a23c" if score >= 60 else "#f56c6c"
         items_rows += f"""
         <tr>
-            <td>{r['code']}</td>
-            <td>{r['name']}</td>
-            <td>{r['category']}</td>
-            <td style="font-size:12px">{r['requirement'][:60] if r['requirement'] else ''}</td>
+            <td>{e(r['code'])}</td>
+            <td>{e(r['name'])}</td>
+            <td>{e(r['category'])}</td>
+            <td style="font-size:12px">{e(r['requirement'][:60]) if r['requirement'] else ''}</td>
             <td style="color:{color};font-weight:bold">{score}%</td>
-            <td style="font-size:12px">{r['gap_note'][:40] if r['gap_note'] else ''}</td>
+            <td style="font-size:12px">{e(r['gap_note'][:40]) if r['gap_note'] else ''}</td>
         </tr>"""
+
+    e = _html.escape
+    assessment_name = e(assessment.name) if assessment else 'N/A'
+    target_level = str(assessment.target_level) if assessment else '-'
 
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -93,8 +98,8 @@ def _render_report_html(snapshot_id: int, db: Session) -> str:
     h2 {{ margin-top: 32px; margin-bottom: 12px; }}
 </style></head>
 <body>
-    <h1>{assessment.name if assessment else 'N/A'} — 评估报告</h1>
-    <p class="subtitle">快照版本: {snap.version} | 目标级别: {assessment.target_level if assessment else '-'}级 | 锁定时间: {snap.locked_at.strftime('%Y-%m-%d %H:%M')}</p>
+    <h1>{assessment_name} — 评估报告</h1>
+    <p class="subtitle">快照版本: {e(snap.version)} | 目标级别: {target_level}级 | 锁定时间: {snap.locked_at.strftime('%Y-%m-%d %H:%M')}</p>
 
     <div class="summary">
         <div class="summary-item"><div class="num">{len(rows)}</div>指标总数</div>

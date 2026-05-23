@@ -83,6 +83,10 @@ def _delete_category_cascade(db, cat_id):
     for ind in indicators:
         db.query(StdRequirement).filter(StdRequirement.indicator_id == ind.id).delete()
         db.delete(ind)
+    # Recursively delete grandchildren
+    children = db.query(StdCategory).filter(StdCategory.parent_id == cat_id).all()
+    for child in children:
+        _delete_category_cascade(db, child.id)
     db.query(StdCategory).filter(StdCategory.parent_id == cat_id).delete()
 
 

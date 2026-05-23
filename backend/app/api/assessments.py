@@ -211,6 +211,7 @@ def submit_assessment(
     aid: int,
     tenant_id: int = Depends(get_current_tenant_id),
     db: Session = Depends(get_db),
+    _=Depends(require_role("admin", "director", "dept_head")),
 ):
     """Department head submits assessment for review."""
     a = db.query(Assessment).filter(
@@ -227,11 +228,12 @@ def submit_assessment(
     total_weight = 0.0
     for item in items:
         ind = db.get(StdIndicator, item.indicator_id)
+        w = float(ind.weight) if ind and ind.weight else 0
+        total_weight += w
         if ind and item.score is not None and ind.weight:
-            total_weighted += item.score * float(ind.weight) / 100
-            total_weight += float(ind.weight)
+            total_weighted += item.score * w / 100
 
-    if total_weight > 0:
+    if total_weight > 0 and total_weighted > 0:
         a.total_score = round(total_weighted / total_weight * 100, 2)
 
     a.status = "submitted"
@@ -261,6 +263,7 @@ def resubmit_assessment(
     tenant_id: int = Depends(get_current_tenant_id),
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
+    _=Depends(require_role("admin", "director", "dept_head")),
 ):
     """Department head resubmits after rejection."""
     a = db.query(Assessment).filter(
@@ -306,12 +309,20 @@ def lock_assessment(
     if a.status not in ("assessing", "review"):
         raise HTTPException(400, "Cannot lock in current status")
 
-    # Count items with scores
+    # Calculate weighted total score (same formula as submit_assessment)
     items = a.items
-    scored = [it for it in items if it.score is not None]
-    if not scored:
+    total_weighted = 0.0
+    total_weight = 0.0
+    for item in items:
+        if item.score is None:
+            continue
+        ind = db.get(StdIndicator, item.indicator_id)
+        w = float(ind.weight) if ind and ind.weight else 0.0
+        total_weighted += item.score * w / 100
+        total_weight += w
+    if total_weight == 0:
         raise HTTPException(400, "No scores recorded")
-    total = sum(it.score for it in scored) / len(scored)
+    total = round(total_weighted / total_weight * 100, 2)
 
     # Count existing snapshots to determine version
     count = db.query(Snapshot).filter(Snapshot.assessment_id == aid).count()

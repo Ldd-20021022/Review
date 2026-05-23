@@ -55,7 +55,7 @@ def _extract_number(value: str) -> float:
     v = "".join(c for c in v if c not in _UNIT_CHARS)
 
     # 去掉残余的分隔符（如 "1起/年" → "1/" → "1"）
-    v = v.rstrip("/").rstrip("-").rstrip(".")
+    v = v.rstrip("/-.")
 
     # 去掉首尾空白
     v = v.strip()

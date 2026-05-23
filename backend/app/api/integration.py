@@ -7,7 +7,7 @@ from ..database import get_db
 from ..models.assessment import Assessment, AssessmentItem
 from ..models.standard import StdIndicator, StdCategory
 from ..models.department import Department
-from ..middleware.tenant import get_current_tenant_id, get_current_user
+from ..middleware.tenant import get_current_tenant_id, get_current_user, require_role
 from ..services.compliance import check_compliance
 
 router = APIRouter(prefix="/api/integration", tags=["integration"])
@@ -29,6 +29,7 @@ def his_pull_data(
     tenant_id=Depends(get_current_tenant_id),
     db=Depends(get_db),
     user=Depends(get_current_user),
+    _=Depends(require_role("admin", "director")),
 ):
     """HIS/EMR 自动推送数据 — 批量创建/更新科室指标"""
     from datetime import datetime, timezone
@@ -113,6 +114,7 @@ def report_to_commission(
     assessment_id: int = 0,
     tenant_id=Depends(get_current_tenant_id),
     db=Depends(get_db),
+    _=Depends(require_role("admin", "director")),
 ):
     """一键上报省级卫健委平台 — 生成标准格式并提交"""
     a = db.query(Assessment).filter(

@@ -77,7 +77,10 @@ def add_user_to_tenant(
     db.commit()
     db.refresh(ut)
 
-    dept_name = db.get(Department, data.dept_id).name if data.dept_id else None
+    dept_name = None
+    if data.dept_id:
+        dept = db.get(Department, data.dept_id)
+        dept_name = dept.name if dept else None
     return UserTenantInfo(
         id=ut.id,
         user_id=user.id,
@@ -110,7 +113,10 @@ def update_user_role(
     db.commit()
     db.refresh(ut)
 
-    dept_name = db.get(Department, ut.dept_id).name if ut.dept_id else None
+    dept_name = None
+    if ut.dept_id:
+        dept = db.get(Department, ut.dept_id)
+        dept_name = dept.name if dept else None
     return UserTenantInfo(
         id=ut.id,
         user_id=ut.user_id,
@@ -143,6 +149,7 @@ def remove_user_from_tenant(
 @router.post("/{user_id}/reset-password")
 def reset_user_password(
     user_id: int,
+    tenant_id: int = Depends(get_current_tenant_id),
     db: Session = Depends(get_db),
     _=Depends(require_role("admin")),
 ):
@@ -150,6 +157,12 @@ def reset_user_password(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(404, "User not found")
+    # Verify target user belongs to the same tenant
+    ut = db.query(UserTenant).filter(
+        UserTenant.user_id == user_id, UserTenant.tenant_id == tenant_id
+    ).first()
+    if not ut:
+        raise HTTPException(404, "User not found in this tenant")
     import secrets
     new_pwd = secrets.token_hex(6)
     user.password_hash = hash_password(new_pwd)

@@ -209,12 +209,16 @@ class TestWorkflow:
 
 
 class TestSystemAndAudit:
-    def _login(self):
+    def _login_admin(self):
+        r = client.post("/api/auth/login", json={"phone": "admin", "password": "admin123"})
+        return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+    def _login_director(self):
         r = client.post("/api/auth/login", json={"phone": "director", "password": "123456"})
         return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
     def test_system_info(self):
-        r = client.get("/api/system/info", headers=self._login())
+        r = client.get("/api/system/info", headers=self._login_director())
         assert r.status_code == 200
         info = r.json()
         assert "app_name" in info
@@ -222,20 +226,20 @@ class TestSystemAndAudit:
         assert "deepseek_configured" in info
 
     def test_audit_logs(self):
-        r = client.get("/api/audit-logs", headers=self._login())
+        r = client.get("/api/audit-logs", headers=self._login_admin())
         assert r.status_code == 200
         data = r.json()
         assert "items" in data
         assert "total" in data
 
     def test_audit_logs_pagination(self):
-        r = client.get("/api/audit-logs?page=1&size=5", headers=self._login())
+        r = client.get("/api/audit-logs?page=1&size=5", headers=self._login_admin())
         assert r.status_code == 200
         data = r.json()
         assert len(data["items"]) <= 5
 
     def test_audit_logs_filter(self):
-        r = client.get("/api/audit-logs?action=submit", headers=self._login())
+        r = client.get("/api/audit-logs?action=submit", headers=self._login_admin())
         assert r.status_code == 200
 
     def test_health(self):
@@ -244,7 +248,7 @@ class TestSystemAndAudit:
         assert r.json()["status"] == "ok"
 
     def test_tenant_management(self):
-        h = self._login()
+        h = self._login_admin()
         r = client.get("/api/tenants", headers=h)
         assert r.status_code == 200
         tenants = r.json()

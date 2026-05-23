@@ -28,25 +28,6 @@ export function barChart(data, width = 300, height = 160) {
   html += '</svg>'; return html
 }
 
-// ═══════════ Heatmap ═══════════
-export function heatmapChart(rows, cols, getValue, width = 500, height = 30) {
-  const totalH = rows.length * (height + 2) + 30
-  let html = `<svg width="${width}" height="${totalH}" viewBox="0 0 ${width} ${totalH}">`
-  const colW = (width - 100) / cols.length
-  rows.forEach((row, ri) => {
-    const y = ri * (height + 2) + 20
-    html += `<text x="96" y="${y + height/2}" text-anchor="end" dy="0.35em" font-size="11" fill="#64748b">${row}</text>`
-    cols.forEach((col, ci) => {
-      const v = getValue(row, col) || 0
-      const x = 100 + ci * colW
-      const c = v >= 80 ? '#67c23a' : v >= 60 ? '#e6a23c' : v >= 30 ? '#f97316' : '#ef4444'
-      html += `<rect x="${x}" y="${y}" width="${colW - 2}" height="${height}" rx="2" fill="${c}" opacity="0.8"><title>${row} × ${col} = ${v}%</title></rect>`
-      html += `<text x="${x + colW/2}" y="${y + height/2}" text-anchor="middle" dy="0.35em" font-size="9" fill="#fff" font-weight="600">${v}%</text>`
-    })
-  })
-  html += '</svg>'; return html
-}
-
 // ═══════════ Radar ═══════════
 export function radarChart(axes, data, size = 280) {
   const cx = size / 2; const cy = size / 2; const r = size / 2 - 40

@@ -2,7 +2,7 @@ import { defineComponent, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from '/src/shim/element-plus.js'
 import { listUsers, addUser, updateUserRole, removeUser } from '../../api/admin.js'
 import { listDepartments } from '../../api/admin.js'
-import { BASE_URL } from '../../api/client.js'
+import { post } from '../../api/client.js'
 
 export default defineComponent({
   name: 'UsersManagement',
@@ -47,10 +47,7 @@ export default defineComponent({
         await ElMessageBox.confirm('确认重置【' + user.user_name + '】的密码？', '重置密码', { type: 'warning' })
       } catch (_) { return }
       try {
-        const r = await (await fetch(BASE_URL + '/api/users/' + user.user_id + '/reset-password', {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token'), 'Content-Type': 'application/json' }
-        })).json()
+        const r = await post('/api/users/' + user.id + '/reset-password')
         ElMessage.success('密码已重置为: ' + r.new_password + '  (用户: ' + r.phone + ')')
       } catch (e) { ElMessage.error('操作失败: ' + (e.message || '')) }
     }

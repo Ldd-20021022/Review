@@ -41,7 +41,7 @@ export function importAssessmentData(file, cycle) {
   fd.append('file', file)
   fd.append('rating_cycle', cycle)
   const token = localStorage.getItem('token')
-  return fetch(`${BASE_URL}/api/hospital-ratings/import-data?` + new URLSearchParams({rating_cycle: cycle}), {
+  return fetch(`${BASE_URL}/api/hospital-ratings/import-data`, {
     method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd,
   }).then(r => r.json())
 }

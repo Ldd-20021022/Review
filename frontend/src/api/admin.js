@@ -15,6 +15,6 @@ export function deleteDepartment(id) { return del(`/api/departments/${id}`) }
 export function listUsers() { return get('/api/users/') }
 export function addUser(data) { return post('/api/users/', data) }
 export function updateUserRole(id, role, deptId) {
-  return put(`/api/users/${id}?role=${role}&dept_id=${deptId || ''}`)
+  return put(`/api/users/${id}`, { role, dept_id: deptId || null })
 }
 export function removeUser(id) { return del(`/api/users/${id}`) }

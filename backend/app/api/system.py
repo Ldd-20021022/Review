@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/system", tags=["system"])
 def system_info(
     tenant_id: int = Depends(get_current_tenant_id),
     db: Session = Depends(get_db),
-    _=Depends(require_role("admin")),
+    _=Depends(require_role("admin", "director")),
 ):
     """System status and configuration (read-only)."""
     # Database status

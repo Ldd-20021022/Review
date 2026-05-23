@@ -11,7 +11,7 @@ from ..models.standard import StdCategory, StdIndicator
 from ..models.standard_set import StandardSet
 from ..models.department import Department
 from ..models.audit_log import AuditLog
-from ..middleware.tenant import get_current_tenant_id, get_current_user, get_current_user_tenant
+from ..middleware.tenant import get_current_tenant_id, get_current_user, get_current_user_tenant, require_role
 from ..models.user import UserTenant
 from ..services.compliance import check_compliance
 
@@ -66,7 +66,7 @@ def submit_rating(
     tenant_id: int = Depends(get_current_tenant_id),
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
-    ut=Depends(get_current_user_tenant),
+    ut=Depends(require_role("admin", "director", "dept_head")),
 ):
     dept_id = body.department_id or ut.dept_id
     if not dept_id:
@@ -153,7 +153,7 @@ def update_and_resubmit(
     tenant_id: int = Depends(get_current_tenant_id),
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
-    _=Depends(get_current_user_tenant),
+    _=Depends(require_role("admin", "director", "dept_head")),
 ):
     """科室负责人修改已退回的评级数据并重新提交"""
     a = db.query(Assessment).filter(
@@ -438,7 +438,7 @@ def import_assessment_data(
     tenant_id: int = Depends(get_current_tenant_id),
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
-    ut=Depends(get_current_user_tenant),
+    ut=Depends(require_role("admin", "director", "dept_head")),
 ):
     """Excel 批量导入科室评估数据。列: indicator_code | actual_value | remark"""
     dept_id = ut.dept_id
@@ -530,7 +530,7 @@ def copy_previous_cycle(
     tenant_id: int = Depends(get_current_tenant_id),
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
-    ut=Depends(get_current_user_tenant),
+    ut=Depends(require_role("admin", "director", "dept_head")),
 ):
     """复制上一周期的评估数据作为新评估的起点"""
     dept_id = ut.dept_id

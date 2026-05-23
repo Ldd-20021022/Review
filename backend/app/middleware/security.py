@@ -1,6 +1,7 @@
 """Security middleware — rate limiting + persistent login lockout."""
 import time
 import threading
+from datetime import datetime, timezone, timedelta
 from fastapi import Request, HTTPException
 from sqlalchemy.orm import Session
 
@@ -29,15 +30,19 @@ MAX_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
 
 
+def _utc_now_ts() -> float:
+    return datetime.now(timezone.utc).timestamp()
+
+
 def check_login_lockout(phone: str, db: Session):
     """Check if this phone is currently locked out. Raises HTTPException if so."""
     from ..models.login_attempt import LoginAttempt
     entry = db.get(LoginAttempt, phone)
-    if entry and entry.locked_until and time.time() < entry.locked_until:
-        remain = int((entry.locked_until - time.time()) / 60) + 1
+    if entry and entry.locked_until and _utc_now_ts() < entry.locked_until:
+        remain = int((entry.locked_until - _utc_now_ts()) / 60) + 1
         raise HTTPException(429, f"Account locked, try again in {remain} minutes")
     # Clear expired lockout
-    if entry and entry.locked_until and time.time() >= entry.locked_until:
+    if entry and entry.locked_until and _utc_now_ts() >= entry.locked_until:
         db.delete(entry)
         db.commit()
 
@@ -51,7 +56,7 @@ def record_login_failure(phone: str, db: Session):
         db.add(entry)
     entry.count += 1
     if entry.count >= MAX_ATTEMPTS:
-        entry.locked_until = time.time() + LOCKOUT_MINUTES * 60
+        entry.locked_until = _utc_now_ts() + LOCKOUT_MINUTES * 60
     db.commit()
 
 
