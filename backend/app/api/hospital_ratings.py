@@ -635,5 +635,5 @@ def gap_analysis(
             "actual_value": item.actual_value, "is_compliant": item.is_compliant,
         })
 
-    from ..services.gap_analysis import analyze_assessment
-    return analyze_assessment(items)
+    from ..services.gap_analysis import analyze_assessment_ai
+    return analyze_assessment_ai(items, assessment_name=a.name if a else "")

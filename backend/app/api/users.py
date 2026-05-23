@@ -18,6 +18,7 @@ def list_tenant_users(
     tenant_id: int = Depends(get_current_tenant_id),
     role: Optional[str] = Query(None),
     db: Session = Depends(get_db),
+    _=Depends(require_role("admin", "director")),
 ):
     q = (
         db.query(UserTenant)
@@ -137,3 +138,31 @@ def remove_user_from_tenant(
     db.delete(ut)
     db.commit()
     return {"ok": True}
+
+
+@router.post("/{user_id}/reset-password")
+def reset_user_password(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(require_role("admin")),
+):
+    """Admin resets a user's password to a random one. Returns the new password."""
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    import secrets
+    new_pwd = secrets.token_hex(6)
+    user.password_hash = hash_password(new_pwd)
+    db.commit()
+    # Log the action
+    from ..models.audit_log import AuditLog
+    from datetime import datetime, timezone
+    db.add(AuditLog(
+        user_id=0, tenant_id=0,
+        action="reset_password",
+        target_type="user", target_id=user_id,
+        detail=f"Password reset for {user.phone}",
+        created_at=datetime.now(timezone.utc),
+    ))
+    db.commit()
+    return {"ok": True, "new_password": new_pwd, "phone": user.phone}

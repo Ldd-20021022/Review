@@ -2,8 +2,9 @@ import { defineComponent, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '/src/shim/element-plus.js'
 import { getReport, getMyRatings, compareHistory, getGapAnalysis } from '../../api/hospital-rating.js'
-import { getAISummary, getHealthCommissionExport } from '../../api/ai.js'
-import { post } from '../../api/client.js'
+import { getAISummary, getHealthCommissionExport, aiAsyncWithPolling } from '../../api/ai.js'
+import { post, BASE_URL } from '../../api/client.js'
+import { radarChart } from '../../utils/charts.js'
 
 export default defineComponent({
   name: 'HRReportView',
@@ -29,7 +30,7 @@ export default defineComponent({
     async function fetchReport(id) {
       loading.value = true
       selectedId.value = id
-      try { report.value = await getReport(id) }
+      try { report.value = await getReport(id); updateRadar() }
       finally { loading.value = false }
     }
 
@@ -50,15 +51,25 @@ export default defineComponent({
       router.push(`/hospital-rating/form?edit=${id}`)
     }
 
+    const aiProgress = ref('')
+
     async function fetchAISummary() {
       if (!report.value) return
       aiLoading.value = true
+      aiProgress.value = '正在提交AI分析任务...'
       try {
-        const res = await getAISummary(report.value.assessment_id)
-        aiReport.value = res.report
-        anomalies.value = res.anomalies || []
+        const { result, error, timedOut } = await aiAsyncWithPolling('summary', { aid: report.value.assessment_id }, {
+          onProgress: ({ status, elapsed }) => {
+            aiProgress.value = status === 'running' ? `AI 正在分析中... (已等待 ${elapsed}秒)` : ''
+          }
+        })
+        if (error) { ElMessage.error(error); return }
+        if (result) {
+          aiReport.value = result.report
+          anomalies.value = result.anomalies || []
+        }
       } catch (e) { ElMessage.error('AI分析失败: ' + e.message) }
-      finally { aiLoading.value = false }
+      finally { aiLoading.value = false; aiProgress.value = '' }
     }
 
     async function exportJSON() {
@@ -76,20 +87,38 @@ export default defineComponent({
     async function fetchGapAnalysis() {
       if (!report.value) return
       analyzing.value = true
-      try { gapAnalysis.value = await getGapAnalysis(report.value.assessment_id) }
-      catch (e) { ElMessage.error('分析失败: ' + e.message) }
+      try {
+        const { result, error } = await aiAsyncWithPolling('gap_analysis', { aid: report.value.assessment_id })
+        if (error) { ElMessage.error(error); return }
+        if (result) gapAnalysis.value = result
+      } catch (e) { ElMessage.error('分析失败: ' + e.message) }
       finally { analyzing.value = false }
     }
 
     async function fetchHistory() {
       if (!report.value) return
-      // Find dept_id from the first item's context - we use the assessment's department
       try {
-        const all = await getMyRatings()
-        if (all.length > 0) {
-          history.value = all
+        // Use compareHistory for cross-cycle comparison
+        const deptId = report.value.department_id
+        if (deptId) {
+          history.value = await compareHistory(deptId)
+        } else {
+          // Fallback: show all user's assessments
+          history.value = await getMyRatings()
         }
-      } catch (_) { history.value = null }
+      } catch (_) {
+        try { history.value = await getMyRatings() } catch (__) { history.value = null }
+      }
+    }
+
+    const radarHTML = ref('')
+
+    function updateRadar() {
+      const cats = report.value?.categories_breakdown
+      if (!cats || cats.length < 3) { radarHTML.value = ''; return }
+      const axes = cats.slice(0, 8).map(c => c.name.slice(0, 4))
+      const values = cats.slice(0, 8).map(c => c.rate)
+      radarHTML.value = radarChart(axes, values, 280)
     }
 
     function exportCSV() {
@@ -127,7 +156,7 @@ export default defineComponent({
     }
 
     return { report, list, loading, selectedId, resubmitting, history, gapAnalysis, analyzing,
-      aiReport, anomalies, aiLoading,
+      aiReport, anomalies, aiLoading, aiProgress, radarHTML, BASE_URL,
       fetchReport, handleResubmit, goEdit, exportCSV, fetchGapAnalysis, fetchAISummary, exportJSON, statusMap }
   },
   template: `
@@ -139,7 +168,7 @@ export default defineComponent({
         @click="goEdit(report.assessment_id)">✏️ 修改数据</el-button>
       <el-button v-if="report.status === 'rejected' || report.status === 'draft'"
         type="primary" @click="handleResubmit" :loading="resubmitting">📤 提交审核</el-button>
-      <a :href="'http://localhost:8000/api/hospital-ratings/report/' + report.assessment_id + '/pdf'" target="_blank" style="text-decoration:none">
+      <a :href="BASE_URL + '/api/hospital-ratings/report/' + report.assessment_id + '/pdf'" target="_blank" style="text-decoration:none">
         <el-button>📄 下载 PDF</el-button>
       </a>
       <el-button @click="fetchAISummary" :loading="aiLoading" type="warning">🤖 AI 智能报告</el-button>
@@ -187,12 +216,15 @@ export default defineComponent({
 
     <el-card v-if="report.categories_breakdown" style="margin-bottom:16px">
       <template #header><span style="font-weight:bold">分类达标情况</span></template>
-      <div style="display:flex;gap:12px;flex-wrap:wrap">
-        <div v-for="cat in report.categories_breakdown" :key="cat.name"
-          style="flex:1;min-width:150px;padding:12px;border-radius:8px;background:#f8fafc;text-align:center">
-          <div style="font-size:13px;font-weight:600;margin-bottom:6px">{{ cat.name }}</div>
-          <el-progress :percentage="cat.rate" :color="cat.rate >= 80 ? '#67c23a' : cat.rate >= 60 ? '#e6a23c' : '#f56c6c'" :stroke-width="8" />
-          <div style="font-size:12px;color:#94a3b8;margin-top:4px">{{ cat.compliant }}/{{ cat.total }} 达标</div>
+      <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+        <div v-if="radarHTML" v-html="radarHTML" style="flex-shrink:0" />
+        <div style="flex:1;min-width:300px;display:flex;gap:12px;flex-wrap:wrap">
+          <div v-for="cat in report.categories_breakdown" :key="cat.name"
+            style="flex:1;min-width:140px;padding:12px;border-radius:8px;background:#f8fafc;text-align:center">
+            <div style="font-size:13px;font-weight:600;margin-bottom:6px">{{ cat.name }}</div>
+            <el-progress :percentage="cat.rate" :color="cat.rate >= 80 ? '#67c23a' : cat.rate >= 60 ? '#e6a23c' : '#f56c6c'" :stroke-width="8" />
+            <div style="font-size:12px;color:#94a3b8;margin-top:4px">{{ cat.compliant }}/{{ cat.total }} 达标</div>
+          </div>
         </div>
       </div>
     </el-card>
@@ -229,6 +261,11 @@ export default defineComponent({
         </template>
         <p style="color:#64748b;font-size:14px;line-height:1.6;margin:0;white-space:pre-wrap">{{ r.feedback || '（无附加意见）' }}</p>
       </el-card>
+    </div>
+
+    <!-- AI progress indicator -->
+    <div v-if="aiProgress" style="text-align:center;padding:16px;margin-top:8px;background:#f0f9ff;border-radius:8px;color:#3b82f6;font-size:13px">
+      ⏳ {{ aiProgress }}
     </div>
 
     <!-- AI Intelligent Report -->

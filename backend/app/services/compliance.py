@@ -10,24 +10,43 @@
 """
 
 
-# 标准值中可能出现的所有中文单位字符
-_UNIT_CHARS = set("张个起元例人次名次床比例率‰天日月年小时厘米毫升升毫摩尔分秒点钟件种项科处所级类组万等甲乙丙丁")
+# 标准值中可能出现的所有中文单位字符（不含数量级前缀）
+_UNIT_CHARS = set("张个起元例人次名次床比例率‰天日月年小时厘米毫升升毫摩尔分秒点钟件种项科处所级类组等甲乙丙丁")
+
+# 单位数量级前缀 — 需要作为乘法因子处理
+_UNIT_MULTIPLIERS = {"万": 10_000, "亿": 100_000_000, "千": 1_000}
 
 
 def _extract_number(value: str) -> float:
     """从带单位的字符串中提取数字值。
 
-    支持格式: "≤1200张", "≥95%", "<=3个", "100%", "0起", "≥1:1.5"
+    支持格式: "≤1200张", "≥95%", "≤50万人次", "≥1:1.5", "100%", "0起"
     """
     v = str(value)
+    multiplier = 1.0
+
+    # 提取并应用数量级前缀（万/亿/千）
+    for unit, mult in _UNIT_MULTIPLIERS.items():
+        if unit in v:
+            multiplier = mult
+            v = v.replace(unit, "")
+            break
+
     # 去掉比较运算符
     v = v.replace("≤", "").replace("≥", "").replace("<=", "").replace(">=", "")
     v = v.replace("=", "").replace(">", "").replace("<", "").replace(" ", "")
 
-    # 处理比例格式 "1:1.5" → 提取冒号前的数字
+    # 处理比例格式 "1:1.5" → 计算第二项/第一项（每单位X对应的Y数量）
+    # "医护比 >= 1:1.5" 含义：每1名医生至少1.5名护士 → 计算 1.5/1.0 = 1.5
+    # "1:1.6" → 1.6/1.0 = 1.6 >= 1.5 → 达标
     if ":" in v:
-        parts = v.split(":")[0]
-        v = "".join(c for c in parts if c not in _UNIT_CHARS)
+        parts = v.split(":")
+        first = "".join(c for c in parts[0] if c not in _UNIT_CHARS)
+        second = "".join(c for c in parts[1] if c not in _UNIT_CHARS)
+        try:
+            v = str(float(second) / float(first))
+        except (ValueError, ZeroDivisionError):
+            v = parts[0]
 
     # 去掉百分号和千分号
     v = v.replace("%", "").replace("‰", "")
@@ -40,8 +59,15 @@ def _extract_number(value: str) -> float:
 
     # 去掉首尾空白
     v = v.strip()
+    if not v:
+        return 0.0
 
-    return float(v)
+    # 移除残留的非数字字符（如纯中文 "是"）
+    v = "".join(c for c in v if c.isdigit() or c in ".-")
+    if not v or v in (".", "-", "-."):
+        return 0.0
+
+    return float(v) * multiplier
 
 
 def check_compliance(actual_value: str, standard_value: str, indicator_type: str) -> dict:
@@ -51,37 +77,21 @@ def check_compliance(actual_value: str, standard_value: str, indicator_type: str
     Returns:
         {"is_compliant": bool, "score": int}
     """
-    try:
-        actual = _extract_number(actual_value)
-        standard = _extract_number(standard_value)
-    except (ValueError, AttributeError):
-        return {"is_compliant": False, "score": 0}
-
-    if indicator_type == "numeric_less_equal":
-        # 实际值 ≤ 标准值（越小越好）
-        if actual <= standard:
-            return {"is_compliant": True, "score": 100}
-        else:
-            return {"is_compliant": False, "score": max(0, int(100 - (actual - standard) * 50))}
-
-    elif indicator_type == "numeric_greater_equal":
-        # 实际值 ≥ 标准值（越大越好）
-        if actual >= standard:
-            return {"is_compliant": True, "score": 100}
-        else:
-            return {"is_compliant": False, "score": max(0, int(100 - (standard - actual) * 50))}
-
-    elif indicator_type == "numeric_equal":
-        # 实际值 = 标准值
-        ok = actual == standard
+    # yesno: compare text directly, no numeric extraction needed
+    if indicator_type == "yesno":
+        ok = str(actual_value).lower() in ("是", "1", "yes", "true")
         return {"is_compliant": ok, "score": 100 if ok else 0}
 
-    elif indicator_type == "numeric_range":
-        # 标准值格式: "0.5%-1.5%"
+    # numeric_range: standard is a range string like "0.5%-1.5%"
+    if indicator_type == "numeric_range":
         try:
-            parts = standard_value.replace("%", "").split("-")
-            lo, hi = float(parts[0]), float(parts[1])
-        except (ValueError, IndexError):
+            parts = str(standard_value).replace("%", "").replace("‰", "").split("-")
+            lo, hi = float(parts[0].strip()), float(parts[1].strip())
+        except (ValueError, IndexError, AttributeError):
+            return {"is_compliant": False, "score": 0}
+        try:
+            actual = _extract_number(actual_value)
+        except (ValueError, TypeError):
             return {"is_compliant": False, "score": 0}
 
         if lo <= actual <= hi:
@@ -90,9 +100,39 @@ def check_compliance(actual_value: str, standard_value: str, indicator_type: str
             dist = min(abs(actual - lo), abs(actual - hi))
             return {"is_compliant": False, "score": max(0, int(100 - dist * 50))}
 
-    elif indicator_type == "yesno":
-        ok = actual_value.lower() in ("是", "1", "yes", "true")
-        return {"is_compliant": ok, "score": 100 if ok else 0}
+    # numeric types: extract numbers from both values
+    try:
+        actual = _extract_number(actual_value)
+        standard = _extract_number(standard_value)
+    except (ValueError, AttributeError, TypeError):
+        return {"is_compliant": False, "score": 0}
+
+    if indicator_type == "numeric_less_equal":
+        if actual <= standard:
+            return {"is_compliant": True, "score": 100}
+        else:
+            if standard > 0:
+                deviation = (actual - standard) / standard
+            else:
+                deviation = abs(actual - standard)
+            return {"is_compliant": False, "score": max(0, int(100 - deviation * 100))}
+
+    elif indicator_type == "numeric_greater_equal":
+        if actual >= standard:
+            return {"is_compliant": True, "score": 100}
+        else:
+            if standard > 0:
+                deviation = (standard - actual) / standard
+            else:
+                deviation = abs(standard - actual)
+            return {"is_compliant": False, "score": max(0, int(100 - deviation * 100))}
+
+    elif indicator_type == "numeric_equal":
+        if actual == standard:
+            return {"is_compliant": True, "score": 100}
+        if standard > 0 and abs(actual - standard) / standard <= 0.02:
+            return {"is_compliant": True, "score": 95}
+        return {"is_compliant": False, "score": 0}
 
     else:
         return {"is_compliant": True, "score": 100}

@@ -9,6 +9,7 @@ from ..models.assessment import Assessment, AssessmentItem
 from ..models.standard import StdIndicator, StdCategory
 from ..models.department import Department
 from ..middleware.tenant import get_current_tenant_id, get_current_user, get_current_user_tenant
+from ..services.deepseek_client import chat_with_system
 
 router = APIRouter(prefix="/api/workflow", tags=["workflow"])
 
@@ -188,4 +189,190 @@ def random_inspection(
         "total": len(sample),
         "compliant": compliant,
         "pass_rate": round(compliant / len(sample) * 100, 1) if sample else 0,
+    }
+
+
+# ═══════════════ AI 辅助 PDCA ═══════════════
+
+PDCA_SYSTEM = """\
+你是医院质量改进专家，精通 PDCA（Plan-Do-Check-Act）方法论。
+你需要为未达标指标设计详细的 PDCA 改进计划，包括具体的行动步骤、责任人建议、时间节点和验收标准。
+计划要分阶段（plan/do/check/act），每个阶段给出可操作的具体措施。"""
+
+
+@router.get("/pdca/{pid}/ai-plan")
+def ai_generate_pdca_plan(
+    pid: int,
+    db: Session = Depends(get_db),
+    ut=Depends(get_current_user_tenant),
+):
+    """AI 为指定 PDCA 项目生成详细的改进计划"""
+    p = db.query(PDCAProject).join(Assessment).filter(
+        PDCAProject.id == pid,
+        Assessment.tenant_id == ut.tenant_id,
+    ).first()
+    if not p:
+        raise HTTPException(404, "PDCA project not found")
+
+    # Fetch indicator info
+    ind = db.get(StdIndicator, p.indicator_id)
+    a = db.get(Assessment, p.assessment_id)
+
+    prompt = f"""请为以下未达标指标设计 PDCA 改进计划：
+
+指标名称: {ind.name if ind else '未知'}
+当前值: {p.current_value}
+目标值: {p.target_value or (ind.standard_value if ind else '')}
+所属科室: {p.dept_id}
+评估名称: {a.name if a else ''}
+
+请按 PDCA 四个阶段给出具体计划：
+
+## Plan（计划阶段）
+- 根因分析
+- 设定量化目标
+- 制定行动方案
+- 责任分工
+
+## Do（执行阶段）
+- 具体实施步骤
+- 培训安排
+- 资源配置
+
+## Check（检查阶段）
+- 过程监控指标
+- 中期检查节点
+- 数据收集方法
+
+## Act（处理阶段）
+- 效果评估标准
+- 标准化措施
+- 持续改进计划"""
+
+    plan = chat_with_system(prompt, PDCA_SYSTEM, temperature=0.4, max_tokens=16384)
+
+    if plan:
+        # Save to plan_detail
+        p.plan_detail = plan
+        db.commit()
+
+    return {
+        "ok": True,
+        "pdca_id": pid,
+        "plan": plan or "AI 服务暂不可用",
+    }
+
+
+@router.get("/meetings/{mid}/ai-summary")
+def ai_meeting_summary(
+    mid: int,
+    db: Session = Depends(get_db),
+    tenant_id=Depends(get_current_tenant_id),
+):
+    """AI 为评审会议生成纪要总结"""
+    m = db.query(ReviewMeeting).filter(
+        ReviewMeeting.id == mid,
+        ReviewMeeting.tenant_id == tenant_id,
+    ).first()
+    if not m:
+        raise HTTPException(404, "Meeting not found")
+
+    prompt = f"""请根据以下评审会议记录生成一份结构化的会议纪要：
+
+会议标题: {m.title}
+日期: {m.meeting_date}
+参会人员: {m.attendees}
+议题: {m.topics}
+讨论内容: {m.discussion}
+会议结论: {m.conclusions}
+投票结果: {m.votes_approve}赞成/{m.votes_reject}反对/{m.votes_abstain}弃权
+
+请生成包含以下内容的会议纪要：
+1. 会议基本信息
+2. 议题概述
+3. 讨论要点归纳
+4. 决议事项
+5. 下一步行动计划（含责任人和时间节点）"""
+
+    summary = chat_with_system(
+        prompt,
+        "你是医院评审会议秘书，擅长整理会议纪要。格式规范，要点清晰，行动计划明确可追踪。",
+        temperature=0.3,
+        max_tokens=16384,
+    )
+
+    return {
+        "meeting_id": mid,
+        "summary": summary or "AI 服务暂不可用",
+    }
+
+
+class AIInspectionBody(BaseModel):
+    category_filter: str = ""
+
+
+@router.post("/inspection/ai-analysis")
+def ai_inspection_analysis(
+    count: int = 10,
+    body: AIInspectionBody = AIInspectionBody(),
+    tenant_id=Depends(get_current_tenant_id),
+    db=Depends(get_db),
+):
+    """AI 模拟抽检分析：先抽检，再用 AI 分析薄弱环节"""
+    import random
+    assessments = db.query(Assessment).filter(
+        Assessment.tenant_id == tenant_id
+    ).all()
+    if not assessments:
+        raise HTTPException(404, "No assessments found")
+
+    all_items = []
+    for a in assessments:
+        for item in a.items:
+            ind = db.get(StdIndicator, item.indicator_id)
+            if not ind:
+                continue
+            cat = db.get(StdCategory, ind.category_id)
+            if body.category_filter and cat and body.category_filter not in cat.name:
+                continue
+            dept = db.get(Department, a.department_id)
+            all_items.append({
+                "dept_name": dept.name if dept else "?",
+                "indicator_name": ind.name,
+                "category": cat.name if cat else "?",
+                "standard_value": ind.standard_value,
+                "unit": ind.unit,
+                "actual_value": item.actual_value,
+                "is_compliant": item.is_compliant,
+            })
+
+    if not all_items:
+        raise HTTPException(404, "No items found for the given filter")
+
+    sample = random.sample(all_items, min(count, len(all_items)))
+    compliant = sum(1 for i in sample if i["is_compliant"])
+
+    # AI analysis
+    import json
+    analysis = chat_with_system(
+        f"""以下是随机抽取的 {len(sample)} 项指标检查结果，请分析薄弱环节：
+
+{json.dumps(sample, ensure_ascii=False, indent=2)}
+
+请给出：
+1. 整体抽检情况评价
+2. 主要薄弱类别/科室
+3. 最容易出问题的指标类型
+4. 建议优先整改的方向""",
+        "你是医院等级评审专家，擅长通过抽样检查发现系统性问题。分析要基于数据，建议要具体。",
+        temperature=0.3,
+        max_tokens=16384,
+    )
+
+    return {
+        "items": sample,
+        "total": len(sample),
+        "compliant": compliant,
+        "pass_rate": round(compliant / len(sample) * 100, 1) if sample else 0,
+        "ai_analysis": analysis or "AI 服务暂不可用",
     }

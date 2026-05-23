@@ -153,6 +153,24 @@ def delete_indicator(
     return {"ok": True}
 
 
+@router.put("/indicators/{iid}", response_model=IndicatorInfo)
+def update_indicator(
+    iid: int,
+    data: IndicatorCreate,
+    db: Session = Depends(get_db),
+    _=Depends(require_role("admin")),
+):
+    ind = db.get(StdIndicator, iid)
+    if not ind:
+        raise HTTPException(404, "Indicator not found")
+    for k, v in data.dict(exclude_unset=True).items():
+        if k != "requirements":
+            setattr(ind, k, v)
+    db.commit()
+    db.refresh(ind)
+    return IndicatorInfo.model_validate(ind)
+
+
 # ── Requirements ──
 
 @router.put("/indicators/{iid}/requirements", response_model=IndicatorInfo)
@@ -197,15 +215,11 @@ def import_excel(
 
 @router.get("/template")
 def download_template():
-    """下载 Excel 导入模板"""
-    from openpyxl import Workbook
+    """下载 Excel 导入模板（含填写说明 sheet）"""
     from io import BytesIO
     from fastapi.responses import StreamingResponse
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "指标导入模板"
-    ws.append(["分类名称", "分类编码", "分类权重", "指标名称", "指标编码", "标准值", "单位", "判定类型", "指标权重", "满分"])
-    ws.append(["医疗质量与安全", "MED", 30, "住院患者死亡率", "IND01", "≤0.8%", "%", "numeric_less_equal", 40, 100])
+    from ..utils.excel import generate_template
+    wb = generate_template()
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)

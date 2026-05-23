@@ -3,7 +3,9 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from '/src/shim/element-plus.js'
 import { useAuthStore } from '../../stores/auth.js'
 import { getDashboard, approveRating, rejectRating, getReport } from '../../api/hospital-rating.js'
-import { donutChart } from '../../utils/charts.js'
+import { aiInspectionAnalysis, aiAsyncWithPolling } from '../../api/ai.js'
+import { get } from '../../api/client.js'
+import { donutChart, barChart, radarChart, trendChart } from '../../utils/charts.js'
 
 export default defineComponent({
   name: 'HRDashboard',
@@ -19,8 +21,12 @@ export default defineComponent({
     const selected = ref(new Set())
     const batchProcessing = ref(false)
     const deptReport = ref(null)
-    const sortKey = ref('score')
-    const sortAsc = ref(false)
+    const lastUpdated = ref('')
+    const autoRefresh = ref(true)
+    let refreshTimer = null
+    const refreshing = ref(false)
+
+    function updateTimestamp() { lastUpdated.value = new Date().toLocaleTimeString('zh-CN') }
 
     const isManager = computed(() => auth.user?.role === 'admin' || auth.user?.role === 'director')
 
@@ -34,8 +40,50 @@ export default defineComponent({
       ], 100)
     })
 
+    const barChartHTML = computed(() => {
+      if (!dashboard.value?.departments?.length) return ''
+      const depts = dashboard.value.departments.filter(d => d.score != null).slice(0, 10)
+      if (!depts.length) return ''
+      const colors = ['#3b82f6', '#67c23a', '#e6a23c', '#f56c6c', '#8b5cf6', '#06b6d4']
+      return barChart(
+        depts.map((d, i) => ({ label: d.name.slice(0, 4), value: d.score, color: colors[i % colors.length] })),
+        360, 220
+      )
+    })
+
+    const radarChartHTML = computed(() => {
+      const catStats = dashboard.value?.category_stats
+      if (!catStats || catStats.length < 3) return ''
+      const axes = catStats.slice(0, 8).map(c => c.name.slice(0, 4))
+      const values = catStats.slice(0, 8).map(c => c.rate)
+      return radarChart(axes, values, 260)
+    })
+
+    const trendChartHTML = computed(() => {
+      if (!dashboard.value?.departments?.length) return ''
+      const deptsWithScore = dashboard.value.departments.filter(d => d.score != null && d.rating_cycle)
+      if (deptsWithScore.length < 2) return ''
+      // Group by cycle and compute average score per cycle
+      const cycleMap = {}
+      for (const d of deptsWithScore) {
+        const c = d.rating_cycle || '未知'
+        if (!cycleMap[c]) cycleMap[c] = { total: 0, count: 0 }
+        cycleMap[c].total += d.score
+        cycleMap[c].count += 1
+      }
+      const pts = Object.entries(cycleMap).map(([label, data]) => ({
+        label, value: Math.round(data.total / data.count)
+      }))
+      pts.sort((a, b) => (a.label || '').localeCompare(b.label || ''))
+      return pts.length >= 2 ? trendChart(pts, 300, 140) : ''
+    })
+
     const sortedDepts = computed(() => {
-      const depts = (dashboard.value?.departments || []).slice()
+      let depts = (dashboard.value?.departments || []).slice()
+      // Filter by selected cycle
+      if (cycle.value) {
+        depts = depts.filter(d => !d.rating_cycle || d.rating_cycle === cycle.value)
+      }
       depts.sort((a, b) => {
         const va = a[sortKey.value] ?? (sortKey.value === 'score' ? -1 : '')
         const vb = b[sortKey.value] ?? (sortKey.value === 'score' ? -1 : '')
@@ -46,21 +94,48 @@ export default defineComponent({
       return depts
     })
 
+    const filteredStats = computed(() => {
+      const depts = sortedDepts.value
+      const scores = depts.filter(d => d.score != null).map(d => d.score)
+      return {
+        avgScore: scores.length ? (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(1) : '-',
+        total: depts.length,
+        approved: depts.filter(d => d.status === 'approved').length,
+        rejected: depts.filter(d => d.status === 'rejected').length,
+        pending: depts.filter(d => d.status === 'submitted' || d.status === 'revising').length,
+        notSubmitted: depts.filter(d => d.status === 'not_submitted' || d.status === 'draft').length,
+      }
+    })
+
     function toggleSort(key) {
       if (sortKey.value === key) sortAsc.value = !sortAsc.value
       else { sortKey.value = key; sortAsc.value = key === 'status' }
     }
 
-    async function fetch() {
-      loading.value = true
+    async function fetch(showSpinner = true) {
+      if (showSpinner) loading.value = true; else refreshing.value = true
       try {
         dashboard.value = await getDashboard()
         if (!isManager.value && dashboard.value?.departments?.length > 0) {
           const aid = dashboard.value.departments[0].assessment_id
           if (aid) { try { deptReport.value = await getReport(aid) } catch (_) { deptReport.value = null } }
         }
-      } finally { loading.value = false }
+        updateTimestamp()
+      } finally { loading.value = false; refreshing.value = false }
     }
+
+    function toggleAutoRefresh() {
+      autoRefresh.value = !autoRefresh.value
+      if (autoRefresh.value) startAutoRefresh()
+      else stopAutoRefresh()
+    }
+
+    function startAutoRefresh() {
+      stopAutoRefresh()
+      if (autoRefresh.value) refreshTimer = setInterval(() => fetch(false), 30000)
+    }
+
+    function stopAutoRefresh() { if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null } }
 
     function goReport(id) { if (id) router.push(`/hospital-rating/reports?assessment=${id}`) }
 
@@ -108,6 +183,70 @@ export default defineComponent({
       ElMessage.success(`已通过${ok}/${ids.length}`); clearSelection(); batchProcessing.value = false; await fetch()
     }
 
+    // ── Recent activity ──
+    const recentLogs = ref([])
+    const logsLoading = ref(false)
+
+    async function fetchRecentLogs() {
+      if (!isManager.value) return
+      logsLoading.value = true
+      try {
+        const res = await get('/api/audit-logs', { size: 8 })
+        recentLogs.value = res.items || []
+      } catch (_) { recentLogs.value = [] }
+      finally { logsLoading.value = false }
+    }
+
+    const actionLabelMap = {
+      submit: '📤 提交', draft: '💾 草稿', import: '📥 导入',
+      approve: '✅ 通过', reject: '❌ 退回', resubmit: '🔄 重新提交',
+      edit: '✏️ 修改', create: '➕ 创建', delete: '🗑 删除',
+    }
+
+    function fmtLogTime(ts) {
+      if (!ts) return ''
+      const d = new Date(ts)
+      const now = new Date()
+      const diff = now - d
+      if (diff < 60000) return '刚刚'
+      if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前'
+      if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前'
+      return d.toLocaleDateString('zh-CN')
+    }
+
+    // ── AI diagnostics ──
+    const aiDiagnosing = ref(false)
+    const aiDiagnosis = ref('')
+
+    const aiDiagnosisProgress = ref('')
+
+    async function runAIDiagnosis() {
+      aiDiagnosing.value = true
+      aiDiagnosis.value = ''
+      aiDiagnosisProgress.value = '正在提交AI诊断任务...'
+      try {
+        const { result, error, timedOut } = await aiAsyncWithPolling('inspection', { count: 20 }, {
+          onProgress: ({ status, elapsed }) => {
+            aiDiagnosisProgress.value = status === 'running' ? 'AI 正在分析全院数据... (已等待 ' + elapsed + '秒)' : ''
+          }
+        })
+        if (error) { ElMessage.error(error); return }
+        if (result) {
+          let text = result.ai_analysis || 'AI 暂未返回分析结果'
+          if (result.items) {
+            const issues = result.items.filter(i => !i.is_compliant)
+            text += '\n\n📊 抽检统计：共' + result.total + '项，达标' + result.compliant + '项，通过率' + result.pass_rate + '%'
+            if (issues.length > 0) {
+              text += '\n⚠️ 发现问题：' + issues.map(i => i.indicator_name).join('、')
+            }
+          }
+          aiDiagnosis.value = text
+        }
+      } catch (e) {
+        ElMessage.error('AI 诊断失败: ' + (e.message || '服务暂不可用'))
+      } finally { aiDiagnosing.value = false; aiDiagnosisProgress.value = '' }
+    }
+
     function exportCSV() {
       const depts = dashboard.value?.departments || []
       const rows = [['科室','周期','总分','状态','未达标']]
@@ -119,13 +258,16 @@ export default defineComponent({
 
     const statusMap = { approved: '✅已通过', rejected: '❌已退回', submitted: '📝待审核', revising: '🔄整改中', draft: '📋草稿', not_submitted: '📋未提交' }
 
-    onMounted(fetch)
+    onMounted(() => { fetch(); fetchRecentLogs(); startAutoRefresh(); updateTimestamp() })
 
     return {
       dashboard, loading, cycle, rejectDialog, rejectForm, rejecting, isManager, selected, batchProcessing, deptReport,
-      chartHTML, sortedDepts, sortKey, sortAsc,
+      chartHTML, barChartHTML, radarChartHTML, trendChartHTML, sortedDepts, filteredStats, sortKey, sortAsc,
       goReport, toggleSelect, selectAllSubmitted, clearSelection, openReject, openBatchReject, handleReject, handleApprove,
       batchApprove, exportCSV, toggleSort, statusMap,
+      aiDiagnosing, aiDiagnosis, aiDiagnosisProgress, runAIDiagnosis, router,
+      recentLogs, logsLoading, fetchRecentLogs, actionLabelMap, fmtLogTime,
+      lastUpdated, autoRefresh, refreshing, toggleAutoRefresh, sortKey, sortAsc,
     }
   },
   template: `
@@ -137,9 +279,22 @@ export default defineComponent({
       <el-select v-model="cycle" size="small" style="width:120px">
         <el-option v-for="y in ['2024年度','2025年度','2026年度']" :key="y" :label="y" :value="y" />
       </el-select>
-      <el-button size="small" @click="fetch">🔄 刷新</el-button>
+      <el-button size="small" @click="fetch()" :loading="refreshing">🔄 刷新</el-button>
+      <el-button size="small" :type="autoRefresh ? 'success' : 'info'" @click="toggleAutoRefresh" style="font-size:11px">
+        {{ autoRefresh ? '⏱ 自动' : '⏸ 手动' }}
+      </el-button>
+      <span v-if="lastUpdated" style="font-size:11px;color:#94a3b8">更新于 {{ lastUpdated }}</span>
       <el-button v-if="isManager" size="small" @click="exportCSV">📥 导出</el-button>
     </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <el-button size="small" @click="router.push('/hospital-rating/form')">📋 填报数据</el-button>
+    <el-button size="small" @click="router.push('/hospital-rating/reports')">📄 查看报告</el-button>
+    <el-button v-if="isManager" size="small" @click="router.push('/hospital-rating/workflow')">🔄 质量改进</el-button>
+    <el-button v-if="isManager" size="small" @click="router.push('/hospital-rating/knowledge')">📚 AI 知识库</el-button>
+    <el-button v-if="isManager" size="small" type="warning" @click="runAIDiagnosis" :loading="aiDiagnosing">🤖 AI 诊断</el-button>
   </div>
 
   <!-- Stat Cards -->
@@ -153,25 +308,25 @@ export default defineComponent({
     <el-col :span="isManager ? 5 : 6">
       <el-card shadow="never" style="text-align:center;border-left:3px solid #3b82f6">
         <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">{{ isManager ? '全院均分' : '科室得分' }}</div>
-        <div style="font-size:28px;font-weight:700;color:#3b82f6">{{ dashboard?.average_score ?? '-' }}</div>
+        <div style="font-size:28px;font-weight:700;color:#3b82f6">{{ isManager ? filteredStats.avgScore : (dashboard?.average_score ?? '-') }}</div>
       </el-card>
     </el-col>
     <el-col :span="isManager ? 5 : 6">
       <el-card shadow="never" style="text-align:center;border-left:3px solid #67c23a">
-        <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">✅ 已达标</div>
-        <div style="font-size:28px;font-weight:700;color:#67c23a">{{ dashboard?.approved ?? 0 }}<span style="font-size:14px">个</span></div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">✅ 已通过</div>
+        <div style="font-size:28px;font-weight:700;color:#67c23a">{{ isManager ? filteredStats.approved : (dashboard?.approved ?? 0) }}<span style="font-size:14px">个</span></div>
       </el-card>
     </el-col>
     <el-col :span="isManager ? 5 : 6">
       <el-card shadow="never" style="text-align:center;border-left:3px solid #f56c6c">
-        <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">❌ 未达标</div>
-        <div style="font-size:28px;font-weight:700;color:#f56c6c">{{ dashboard?.rejected ?? 0 }}<span style="font-size:14px">个</span></div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">❌ 已退回</div>
+        <div style="font-size:28px;font-weight:700;color:#f56c6c">{{ isManager ? filteredStats.rejected : (dashboard?.rejected ?? 0) }}<span style="font-size:14px">个</span></div>
       </el-card>
     </el-col>
     <el-col :span="isManager ? 5 : 6">
       <el-card shadow="never" style="text-align:center;border-left:3px solid #e6a23c">
-        <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">📝 待提交/审核</div>
-        <div style="font-size:28px;font-weight:700;color:#e6a23c">{{ (dashboard?.pending ?? 0) + (dashboard?.not_submitted ?? 0) }}<span style="font-size:14px">个</span></div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">📝 待审核/提交</div>
+        <div style="font-size:28px;font-weight:700;color:#e6a23c">{{ isManager ? (filteredStats.pending + filteredStats.notSubmitted) : ((dashboard?.pending ?? 0) + (dashboard?.not_submitted ?? 0)) }}<span style="font-size:14px">个</span></div>
       </el-card>
     </el-col>
   </el-row>
@@ -193,6 +348,34 @@ export default defineComponent({
       </div>
     </div>
   </el-card>
+
+  <!-- Charts Row (admin only) -->
+  <el-row v-if="isManager" :gutter="12" style="margin-bottom:12px">
+    <el-col :span="8">
+      <el-card shadow="never">
+        <template #header><span style="font-weight:600;font-size:13px">📊 科室得分对比</span></template>
+        <div v-if="barChartHTML" v-html="barChartHTML" style="display:flex;justify-content:center" />
+        <div v-else style="text-align:center;padding:30px;color:#94a3b8;font-size:13px">暂无数据</div>
+      </el-card>
+    </el-col>
+    <el-col :span="8">
+      <el-card shadow="never">
+        <template #header><span style="font-weight:600;font-size:13px">🎯 分类达标雷达</span></template>
+        <div v-if="radarChartHTML" v-html="radarChartHTML" style="display:flex;justify-content:center" />
+        <div v-else style="text-align:center;padding:30px;color:#94a3b8;font-size:13px">暂无分类数据</div>
+      </el-card>
+    </el-col>
+    <el-col :span="8">
+      <el-card shadow="never">
+        <template #header><span style="font-weight:600;font-size:13px">📈 趋势变化</span></template>
+        <div v-if="trendChartHTML" v-html="trendChartHTML" style="display:flex;justify-content:center" />
+        <div v-else style="text-align:center;padding:30px;color:#94a3b8;font-size:13px">
+          <p style="font-size:32px;margin:0">📈</p>
+          <p>多周期数据将自动生成趋势图</p>
+        </div>
+      </el-card>
+    </el-col>
+  </el-row>
 
   <!-- Department Table (admin only) -->
   <el-card v-if="isManager" shadow="never" style="margin-bottom:12px">
@@ -303,6 +486,49 @@ export default defineComponent({
         <el-progress :percentage="cat.rate" :color="cat.rate>=80?'#67c23a':cat.rate>=60?'#e6a23c':'#f56c6c'" :stroke-width="6" />
         <div style="font-size:11px;color:#94a3b8;margin-top:4px">{{ cat.compliant }}/{{ cat.total }} 项达标</div>
       </div>
+    </div>
+  </el-card>
+
+  <!-- Recent Activity (admin only) -->
+  <el-card v-if="isManager" shadow="never" style="margin-top:12px">
+    <template #header>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:700">📋 近期动态</span>
+        <el-button size="small" @click="fetchRecentLogs" :loading="logsLoading">🔄 刷新</el-button>
+      </div>
+    </template>
+    <div v-if="recentLogs.length === 0" style="text-align:center;padding:20px;color:#94a3b8;font-size:13px">
+      暂无操作记录
+    </div>
+    <div v-else style="display:flex;flex-direction:column;gap:4px">
+      <div v-for="log in recentLogs.slice(0, 8)" :key="log.id"
+        style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:4px;font-size:12px"
+        :style="{background: log.action === 'reject' ? '#fff5f5' : log.action === 'approve' ? '#f0fdf4' : '#f8fafc'}">
+        <span style="width:70px">{{ actionLabelMap[log.action] || log.action }}</span>
+        <span style="color:#64748b;flex:1">{{ log.detail || (log.target_type + '#' + log.target_id) }}</span>
+        <span style="color:#94a3b8;font-size:11px;white-space:nowrap">{{ fmtLogTime(log.created_at) }}</span>
+      </div>
+    </div>
+  </el-card>
+
+  <!-- AI Diagnostic Panel (admin only) -->
+  <el-card v-if="isManager" shadow="never" style="margin-top:12px;border-left:4px solid #3b82f6">
+    <template #header>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-weight:700">🤖 AI 全院诊断</span>
+        <el-button size="small" type="warning" @click="runAIDiagnosis" :loading="aiDiagnosing">
+          🔍 开始AI诊断
+        </el-button>
+      </div>
+    </template>
+    <div v-if="aiDiagnosing" style="text-align:center;padding:30px">
+      <span style="font-size:28px">⏳</span>
+      <p style="color:#94a3b8;font-size:13px;margin-top:8px">{{ aiDiagnosisProgress || 'AI 正在分析全院评审数据，识别薄弱环节...' }}</p>
+    </div>
+    <div v-if="aiDiagnosis" style="line-height:1.9;color:#334155;font-size:14px;white-space:pre-wrap">{{ aiDiagnosis }}</div>
+    <div v-if="!aiDiagnosis && !aiDiagnosing" style="text-align:center;padding:30px;color:#94a3b8">
+      <p style="font-size:36px;margin:0">🤖</p>
+      <p style="margin-top:8px">点击"开始AI诊断"，DeepSeek 将随机抽检全院指标并分析薄弱环节</p>
     </div>
   </el-card>
 

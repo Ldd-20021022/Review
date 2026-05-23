@@ -11,3 +11,5 @@ from .standard_set import StandardSet
 from .audit_log import AuditLog
 from .knowledge import Regulation, RectifyCase
 from .workflow import PDCAProject, ReviewMeeting
+from .login_attempt import LoginAttempt
+from .ai_task import AITask

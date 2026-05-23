@@ -1,4 +1,7 @@
 from contextlib import asynccontextmanager
+import logging
+import os
+from logging.handlers import RotatingFileHandler
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,6 +9,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .database import engine, Base
 from .models import *  # noqa: ensure all models registered
+
+# ── File logging ──
+LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+_file_handler = RotatingFileHandler(
+    os.path.join(LOG_DIR, "app.log"), maxBytes=5*1024*1024, backupCount=5, encoding="utf-8"
+)
+_file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+logging.getLogger().addHandler(_file_handler)
+logging.getLogger().setLevel(logging.INFO if not settings.DEBUG else logging.DEBUG)
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 from .api.auth import router as auth_router
 from .api.standards import router as standards_router
 from .api.tenants import router as tenants_router
@@ -23,6 +37,9 @@ from .api.knowledge import router as knowledge_router
 from .api.ai_endpoints import router as ai_router
 from .api.workflow import router as workflow_router
 from .api.integration import router as integration_router
+from .api.audit import router as audit_router
+from .api.system import router as system_router
+from .api.tasks import router as tasks_router
 
 
 @asynccontextmanager
@@ -31,6 +48,19 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     yield
 
+
+# Startup security checks
+_unsafe_jwt = not settings.JWT_SECRET or "CHANGE_THIS" in settings.JWT_SECRET or "CHANGE_ME" in settings.JWT_SECRET
+if _unsafe_jwt:
+    if settings.DEBUG:
+        import warnings
+        warnings.warn("WARNING: JWT_SECRET is using an unsafe default. "
+                       "Set a real secret in .env before deploying to production!")
+    else:
+        raise RuntimeError(
+            "CRITICAL: JWT_SECRET is not configured or is using an unsafe default. "
+            "Set JWT_SECRET=<random-64-chars> in your .env file."
+        )
 
 app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG, lifespan=lifespan)
 
@@ -67,6 +97,9 @@ app.include_router(knowledge_router)
 app.include_router(ai_router)
 app.include_router(workflow_router)
 app.include_router(integration_router)
+app.include_router(audit_router)
+app.include_router(system_router)
+app.include_router(tasks_router)
 
 
 @app.get("/api/health")

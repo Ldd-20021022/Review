@@ -2,7 +2,7 @@ import { defineComponent, ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from '/src/shim/element-plus.js'
 import { getStandards, submitRating, updateRating, getReport, importAssessmentData, copyPreviousCycle } from '../../api/hospital-rating.js'
-import { checkCompliance, calcScore } from '../../utils/compliance.js'
+import { checkCompliance, calcScore, _extractNumber } from '../../utils/compliance.js'
 
 const LS_KEY = 'hr_draft'
 
@@ -165,11 +165,20 @@ export default defineComponent({
 
     function validateValue(val, ind) {
       if (!val || val === '') return null
-      if (ind.indicator_type === 'yesno') return null // any value ok for yesno
-      const cleaned = String(val).replace('%', '').trim()
+      if (ind.indicator_type === 'yesno') return null
+      const cleaned = String(val).replace('%', '').replace(':', '').replace(' ','').trim()
       if (cleaned === '') return null
       if (isNaN(parseFloat(cleaned))) return '请输入有效数字'
       return null
+    }
+
+    // Compute placeholder text based on indicator type
+    function getPlaceholder(ind) {
+      if (ind.indicator_type === 'yesno') return '选择是/否'
+      if (ind.indicator_type === 'numeric_range') return '如: 0.8'
+      if (String(ind.standard_value || '').includes(':')) return '如: 1:1.6'
+      if (String(ind.standard_value || '').includes('万')) return '如: 48万'
+      return ind.unit || '输入值'
     }
 
     function getDetails() {
@@ -183,9 +192,52 @@ export default defineComponent({
       return details
     }
 
+    // Pre-submit validation
+    function validateBeforeSubmit(details) {
+      const warnings = []
+      const total = allIndicators.value.length
+      const filled = details.length
+
+      if (total > 10 && filled < total * 0.5) {
+        warnings.push(`仅填写了 ${filled}/${total} 项指标（${Math.round(filled/total*100)}%），建议尽量填写完整后再提交审核。`)
+      }
+
+      // Check for extreme values
+      const extremes = []
+      for (const d of details) {
+        const ind = allIndicators.value.find(i => i.id === d.indicator_id)
+        if (!ind || ind.indicator_type === 'yesno') continue
+        try {
+          const actual = _extractNumber(d.actual_value)
+          const std = _extractNumber(ind.standard_value)
+          if (isNaN(actual) || isNaN(std) || std === 0) continue
+          const ratio = ind.indicator_type.includes('less') ? (actual - std) / std : (std - actual) / std
+          if (ratio > 2.0) {
+            extremes.push(`${ind.name}: 实际 ${d.actual_value} vs 标准 ${ind.standard_value}（偏差 >200%）`)
+          }
+        } catch (_) {}
+      }
+      if (extremes.length > 0) {
+        warnings.push(`以下指标偏差极大，请核实数据是否正确：\n${extremes.slice(0, 5).join('\n')}`)
+      }
+
+      return warnings
+    }
+
     async function handleSubmit() {
       const details = getDetails()
       if (details.length === 0) { ElMessage.warning('请至少填写一项指标数据'); return }
+
+      // Pre-submit validation
+      const warnings = validateBeforeSubmit(details)
+      if (warnings.length > 0) {
+        try {
+          await ElMessageBox.confirm(
+            warnings.join('\n\n') + '\n\n是否仍要继续提交？',
+            '提交确认', { confirmButtonText: '继续提交', cancelButtonText: '返回修改', type: 'warning', dangerouslyUseHTMLString: false }
+          )
+        } catch (_) { return }
+      }
       submitting.value = true
       try {
         const payload = { rating_cycle: cycle.value, details, status: 'submitted' }
@@ -226,7 +278,7 @@ export default defineComponent({
     return {
       categories, formValues, formRemarks, activeNames, submitting, saving, importing, cycle, cycleOptions, editId,
       allIndicators, stats, fillProgress, lastSaved, checkCompliance, handleSubmit, handleSaveDraft, validateValue,
-      handleFileImport, handleCopyPrevious,
+      handleFileImport, handleCopyPrevious, getPlaceholder,
     }
   },
   template: `
@@ -259,18 +311,35 @@ export default defineComponent({
   <el-collapse v-model="activeNames" v-else>
     <el-collapse-item v-for="cat in categories" :key="String(cat.id)" :name="String(cat.id)">
       <template #title>
-        <span style="font-weight:600;font-size:14px">
-          {{ cat.name }}
-          <span style="color:#909399;font-weight:400;font-size:12px">(权重 {{ cat.weight }}%)</span>
-        </span>
+        <div style="display:flex;align-items:center;gap:12px;width:100%;padding-right:20px">
+          <span style="font-weight:600;font-size:14px">
+            {{ cat.name }}
+            <span style="color:#909399;font-weight:400;font-size:12px">(权重 {{ cat.weight || 0 }}%)</span>
+          </span>
+          <span style="font-size:11px;color:#94a3b8">
+            {{ (cat.indicators || []).filter(i => formValues[i.id] && formValues[i.id] !== '').length }}/{{ (cat.indicators || []).length }} 已填
+          </span>
+          <el-progress
+            :percentage="(cat.indicators || []).length > 0 ? Math.round((cat.indicators || []).filter(i => formValues[i.id] && formValues[i.id] !== '').length / (cat.indicators || []).length * 100) : 0"
+            :stroke-width="4" style="width:80px;flex-shrink:0" />
+          <span style="font-size:11px;margin-left:auto">
+            达标 <span style="color:#67c23a;font-weight:600">{{ (cat.indicators || []).filter(i => checkCompliance(formValues[i.id], i.standard_value, i.indicator_type) === true).length }}</span>
+          </span>
+        </div>
       </template>
       <el-table :data="(cat.indicators || [])" stripe size="small">
         <el-table-column label="指标名称" min-width="180"><template #default="{ row }">{{ row.name }}</template></el-table-column>
         <el-table-column label="标准值" width="120" align="center"><template #default="{ row }">{{ row.standard_value }}{{ row.unit ? ' ' + row.unit : '' }}</template></el-table-column>
-        <el-table-column label="实际值" width="160" align="center">
+        <el-table-column label="实际值" width="180" align="center">
           <template #default="{ row }">
-            <el-input v-model="formValues[row.id]" size="small" style="width:120px"
-              :placeholder="row.unit || '输入值'"
+            <!-- yesno: toggle select -->
+            <el-select v-if="row.indicator_type === 'yesno'" v-model="formValues[row.id]" size="small" style="width:120px" placeholder="选择...">
+              <el-option label="是" value="是" />
+              <el-option label="否" value="否" />
+            </el-select>
+            <!-- numeric/ratio: text input -->
+            <el-input v-else v-model="formValues[row.id]" size="small" style="width:130px"
+              :placeholder="getPlaceholder(row)"
               :class="{ 'is-error': validateValue(formValues[row.id], row) }" />
             <div v-if="validateValue(formValues[row.id], row)" style="color:#f56c6c;font-size:11px;margin-top:2px">
               {{ validateValue(formValues[row.id], row) }}

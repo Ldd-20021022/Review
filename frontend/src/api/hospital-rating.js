@@ -1,4 +1,4 @@
-import { get, post, put } from './client.js'
+import { get, post, put, BASE_URL } from './client.js'
 
 export function getDashboard() {
   return get('/api/dashboard/director', { set_type: 'hospital_grade' })
@@ -41,7 +41,7 @@ export function importAssessmentData(file, cycle) {
   fd.append('file', file)
   fd.append('rating_cycle', cycle)
   const token = localStorage.getItem('token')
-  return fetch('http://localhost:8000/api/hospital-ratings/import-data?' + new URLSearchParams({rating_cycle: cycle}), {
+  return fetch(`${BASE_URL}/api/hospital-ratings/import-data?` + new URLSearchParams({rating_cycle: cycle}), {
     method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd,
   }).then(r => r.json())
 }

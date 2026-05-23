@@ -1,14 +1,16 @@
 // Auto-detect: Docker (nginx proxy) vs local dev
-const BASE_URL = window.location.port === '80' || window.location.port === '' ? '' : 'http://localhost:8000'
+export const BASE_URL = window.location.port === '80' || window.location.port === '' ? '' : 'http://localhost:8001'
 
 async function request(method, url, data = null) {
   const headers = { 'Content-Type': 'application/json' }
+  // Send token via Authorization header for Bearer fallback
+  // (httpOnly cookie is sent automatically via credentials: 'include')
   const token = localStorage.getItem('token')
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const config = { method, headers }
+  const config = { method, headers, credentials: 'include' }
   if (data && method !== 'GET') {
     config.body = JSON.stringify(data)
   }

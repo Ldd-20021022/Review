@@ -40,6 +40,13 @@ def approve_assessment(
     # Update status
     a.status = "approved"
 
+    # Audit log
+    from ..models.audit_log import AuditLog
+    from datetime import datetime, timezone
+    db.add(AuditLog(user_id=user.id, tenant_id=tenant_id, action="approve",
+                     target_type="assessment", target_id=a.id,
+                     detail=f"Approved {a.name} score:{a.total_score}"))
+
     # Record review
     db.add(ReviewRecord(
         assessment_id=a.id,
@@ -57,6 +64,15 @@ def approve_assessment(
             type="approve",
             related_id=a.id,
         ))
+        # Email notification (best-effort, non-blocking)
+        try:
+            from ..services.email import send_approval_notification
+            from ..models.user import User as U
+            submitter = db.get(U, a.submitter_id)
+            if submitter and getattr(submitter, 'email', None):
+                send_approval_notification(submitter.email, a.name or '', float(a.total_score or 0))
+        except Exception:
+            pass
 
     db.commit()
     return {"ok": True, "message": "已通过"}
@@ -78,6 +94,13 @@ def reject_assessment(
 
     # Update status
     a.status = "rejected"
+
+    # Audit log
+    from ..models.audit_log import AuditLog
+    from datetime import datetime, timezone
+    db.add(AuditLog(user_id=user.id, tenant_id=tenant_id, action="reject",
+                     target_type="assessment", target_id=a.id,
+                     detail=f"Rejected {a.name} — {body.feedback[:80]}"))
 
     # Record review
     db.add(ReviewRecord(
@@ -114,6 +137,16 @@ def reject_assessment(
             type="reject",
             related_id=a.id,
         ))
+
+    # Email notification (best-effort)
+    try:
+        from ..services.email import send_rejection_notification
+        from ..models.user import User as U
+        submitter = db.get(U, a.submitter_id)
+        if submitter and getattr(submitter, 'email', None):
+            send_rejection_notification(submitter.email, a.name or '', float(a.total_score or 0), body.feedback)
+    except Exception:
+        pass
 
     db.commit()
     return {"ok": True, "message": "已退回并通知科室负责人"}

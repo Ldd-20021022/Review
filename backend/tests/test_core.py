@@ -206,3 +206,89 @@ class TestWorkflow:
         r = client.get("/api/workflow/meetings", headers=h)
         assert r.status_code == 200
         assert len(r.json()) > 0
+
+
+class TestSystemAndAudit:
+    def _login(self):
+        r = client.post("/api/auth/login", json={"phone": "director", "password": "123456"})
+        return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+    def test_system_info(self):
+        r = client.get("/api/system/info", headers=self._login())
+        assert r.status_code == 200
+        info = r.json()
+        assert "app_name" in info
+        assert "db_connected" in info
+        assert "deepseek_configured" in info
+
+    def test_audit_logs(self):
+        r = client.get("/api/audit-logs", headers=self._login())
+        assert r.status_code == 200
+        data = r.json()
+        assert "items" in data
+        assert "total" in data
+
+    def test_audit_logs_pagination(self):
+        r = client.get("/api/audit-logs?page=1&size=5", headers=self._login())
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data["items"]) <= 5
+
+    def test_audit_logs_filter(self):
+        r = client.get("/api/audit-logs?action=submit", headers=self._login())
+        assert r.status_code == 200
+
+    def test_health(self):
+        r = client.get("/api/health")
+        assert r.status_code == 200
+        assert r.json()["status"] == "ok"
+
+    def test_tenant_management(self):
+        h = self._login()
+        r = client.get("/api/tenants", headers=h)
+        assert r.status_code == 200
+        tenants = r.json()
+        assert len(tenants) > 0
+
+
+class TestKnowledgeSearch:
+    def test_regulations_search(self):
+        r = client.get("/api/knowledge/regulations?q=评审")
+        assert r.status_code == 200
+
+    def test_regulations_search_empty(self):
+        r = client.get("/api/knowledge/regulations")
+        assert r.status_code == 200
+
+    def test_cases_search(self):
+        r = client.get("/api/knowledge/cases")
+        assert r.status_code == 200
+
+    def test_case_detail_not_found(self):
+        r = client.get("/api/knowledge/cases/99999")
+        assert r.status_code == 404
+
+
+class TestTenantIsolation:
+    """Verify multi-tenant data isolation."""
+    def _login(self, phone):
+        r = client.post("/api/auth/login", json={"phone": phone, "password": "123456"})
+        return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+    def test_my_department_only_own_data(self):
+        h = self._login("dept1")
+        r = client.get("/api/hospital-ratings/my-department", headers=h)
+        assert r.status_code == 200
+
+    def test_dept_head_denied_admin(self):
+        h = self._login("dept1")
+        r = client.get("/api/audit-logs", headers=h)
+        # dept_head should not access admin endpoints
+        assert r.status_code in (401, 403)
+
+    def test_director_sees_all_departments(self):
+        h = self._login("director")
+        r = client.get("/api/dashboard/director?set_type=hospital_grade", headers=h)
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data.get("departments", [])) >= 1

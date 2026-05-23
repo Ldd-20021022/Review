@@ -1,4 +1,4 @@
-import { get, post, put, del } from './client.js'
+import { get, post, put, del, BASE_URL } from './client.js'
 
 export function listCategories() {
   return get('/api/standards/categories')
@@ -28,6 +28,10 @@ export function createIndicator(data) {
   return post('/api/standards/indicators', data)
 }
 
+export function updateIndicator(id, data) {
+  return put(`/api/standards/indicators/${id}`, data)
+}
+
 export function deleteIndicator(id) {
   return del(`/api/standards/indicators/${id}`)
 }
@@ -40,7 +44,7 @@ export function importExcel(file) {
   const formData = new FormData()
   formData.append('file', file)
   const token = localStorage.getItem('token')
-  return fetch('http://localhost:8000/api/standards/import', {
+  return fetch(`${BASE_URL}/api/standards/import`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: formData,

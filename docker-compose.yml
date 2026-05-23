@@ -1,37 +1,46 @@
-version: '3.8'
+version: "3.8"
 services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: emr_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: emr_rating
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emr_user -d emr_rating"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://emr_user:${DB_PASSWORD:-changeme}@db:5432/emr_rating
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-random-64-chars}
+      SECRET_KEY: ${SECRET_KEY:-change-me-to-random-64-chars}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-pro}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      DEBUG: "false"
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "8000:8000"
-    environment:
-      - DATABASE_URL=sqlite:///./data/emr.db
-      - JWT_SECRET=change-me-in-production
-      - DEBUG=false
-      - SMTP_HOST=smtp.example.com
-      - SMTP_PORT=587
-      - SMTP_USER=noreply@hospital.com
-      - SMTP_PASS=
-    volumes:
-      - backend_data:/app/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://localhost:8000/api/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    command: >
+      sh -c "python -m alembic upgrade head || true && python seed.py && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "80:80"
+    build: ./frontend
     depends_on:
       - backend
-    restart: unless-stopped
+    ports:
+      - "80:80"
 
 volumes:
-  backend_data:
+  pgdata:

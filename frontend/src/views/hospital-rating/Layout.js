@@ -3,12 +3,14 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth.js'
 import { unreadCount, listNotifications, markRead } from '../../api/notifications.js'
 import { initTheme, toggleTheme } from '../../utils/theme.js'
+import { get } from '../../api/client.js'
 
 const mainMenus = [
   { path: '/hospital-rating/dashboard', title: '📊 综合仪表盘', roles: ['admin', 'director', 'expert', 'leader', 'dept_head'] },
   { path: '/hospital-rating/form', title: '📋 数据填报', roles: ['admin', 'director', 'expert', 'dept_head'] },
   { path: '/hospital-rating/reports', title: '📄 评级报告', roles: ['admin', 'director', 'expert', 'leader', 'dept_head'] },
   { path: '/hospital-rating/knowledge', title: '📚 知识库', roles: ['admin', 'director', 'expert', 'leader', 'dept_head'] },
+  { path: '/hospital-rating/workflow', title: '🔄 质量改进', roles: ['admin', 'director', 'expert', 'dept_head'] },
   { path: '/hospital-rating/profile', title: '👤 个人中心', roles: ['admin', 'director', 'expert', 'leader', 'dept_head'] },
 ]
 
@@ -16,6 +18,9 @@ const adminMenus = [
   { path: '/hospital-rating/standards', title: '📐 标准库管理', roles: ['admin'] },
   { path: '/admin/departments', title: '🏥 科室管理', roles: ['admin'] },
   { path: '/admin/users', title: '👥 用户管理', roles: ['admin'] },
+  { path: '/admin/audit-log', title: '📋 审计日志', roles: ['admin'] },
+  { path: '/admin/tenants', title: '🏥 医院管理', roles: ['admin'] },
+  { path: '/admin/settings', title: '⚙️ 系统设置', roles: ['admin'] },
 ]
 
 const roleLabels = {
@@ -83,6 +88,61 @@ export default defineComponent({
     function handleSelect(path) { if (path) router.push(path) }
     function handleLogout() { auth.logout(); router.push('/login') }
 
+    // ── Global Search ──
+    const searchQuery = ref('')
+    const searchResults = ref([])
+    const searchVisible = ref(false)
+    const searching = ref(false)
+    let searchTimer = null
+
+    async function doSearch() {
+      const q = searchQuery.value.trim()
+      if (!q || q.length < 2) { searchResults.value = []; searchVisible.value = false; return }
+      searching.value = true
+      try {
+        const [standards, assessments] = await Promise.all([
+          get('/api/hospital-ratings/standards').catch(() => []),
+          get('/api/hospital-ratings/my-department').catch(() => []),
+        ])
+        const results = []
+        // Search indicators
+        for (const cat of (standards || [])) {
+          for (const ind of (cat.indicators || [])) {
+            if (ind.name.includes(q) || (ind.code || '').toLowerCase().includes(q.toLowerCase())) {
+              results.push({ type: 'indicator', title: ind.name, subtitle: cat.name + ' · ' + (ind.standard_value || ''), id: ind.id, cat: cat.name })
+            }
+          }
+        }
+        // Search assessments
+        for (const a of (assessments || [])) {
+          if ((a.name || '').includes(q) || (a.rating_cycle || '').includes(q)) {
+            results.push({ type: 'assessment', title: a.name, subtitle: a.rating_cycle + ' · ' + (a.total_score || 0) + '分', id: a.id })
+          }
+        }
+        searchResults.value = results.slice(0, 20)
+        searchVisible.value = true
+      } catch (_) { searchResults.value = [] }
+      finally { searching.value = false }
+    }
+
+    function onSearchInput() {
+      clearTimeout(searchTimer)
+      searchTimer = setTimeout(doSearch, 300)
+    }
+
+    function goResult(r) {
+      searchVisible.value = false
+      searchQuery.value = ''
+      if (r.type === 'assessment') {
+        router.push('/hospital-rating/reports?assessment=' + r.id)
+      } else {
+        // Navigate to standards with search pre-filled
+        router.push('/hospital-rating/standards?search=' + encodeURIComponent(r.title))
+      }
+    }
+
+    function closeSearch() { searchVisible.value = false; searchQuery.value = '' }
+
     onMounted(() => {
       initTheme()
       fetchNotifs()
@@ -94,7 +154,7 @@ export default defineComponent({
       route, auth, notifCount, notifs, visibleMenus, visibleAdminMenus, showAdmin,
       collapsed, isMobile, toggleSidebar, toggleTheme,
       handleSelect, handleLogout, roleLabels,
-      fetchNotifList, handleMarkRead, markAllRead,
+      fetchNotifList, handleMarkRead, markAllRead, searchQuery, searchResults, searchVisible, searching, onSearchInput, goResult, closeSearch,
     }
   },
   template: `
@@ -125,6 +185,29 @@ export default defineComponent({
   <el-container>
     <el-header style="background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 16px;gap:12px">
       <el-button text @click="toggleSidebar" style="font-size:20px">☰</el-button>
+
+      <!-- Global Search -->
+      <div style="position:relative;flex:1;max-width:360px;margin:0 12px">
+        <el-input v-model="searchQuery" placeholder="🔍 搜索指标、评估..." size="small"
+          @input="onSearchInput" @focus="searchQuery.length>=2 && doSearch()" @blur="setTimeout(closeSearch,200)" clearable />
+        <div v-if="searchVisible && searchResults.length > 0" @mousedown.prevent
+          style="position:absolute;top:100%;left:0;right:0;z-index:2000;background:#fff;border:1px solid #e2e8f0;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.1);max-height:360px;overflow-y:auto;margin-top:4px">
+          <div v-for="(r,i) in searchResults" :key="i" @click="goResult(r)"
+            style="padding:8px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:13px"
+            :style="{background: i===0?'#f8fafc':''}">
+            <div>
+              <span style="font-weight:600">{{ r.title }}</span>
+              <span style="color:#94a3b8;font-size:11px;margin-left:8px">{{ r.subtitle }}</span>
+            </div>
+            <el-tag size="small" :type="r.type==='assessment'?'warning':'info'">{{ r.type==='assessment'?'评估':'指标' }}</el-tag>
+          </div>
+        </div>
+        <div v-if="searchVisible && searching" @mousedown.prevent
+          style="position:absolute;top:100%;left:0;right:0;z-index:2000;background:#fff;border:1px solid #e2e8f0;border-radius:6px;text-align:center;padding:16px;margin-top:4px;color:#94a3b8;font-size:13px">
+          搜索中...
+        </div>
+      </div>
+
       <div style="display:flex;align-items:center;gap:12px">
       <!-- Notification bell -->
       <el-popover trigger="click" placement="bottom-end" width="320px" @show="fetchNotifList">

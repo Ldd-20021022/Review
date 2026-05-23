@@ -1,4 +1,11 @@
 import os
+from pathlib import Path
+
+# Load .env file from project root (backend/../.env)
+from dotenv import load_dotenv
+_env_file = Path(__file__).resolve().parent.parent.parent / ".env"
+if _env_file.exists():
+    load_dotenv(_env_file)
 
 
 class Settings:
@@ -12,7 +19,7 @@ class Settings:
     )
 
     # JWT
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
 
@@ -35,6 +42,11 @@ class Settings:
     RATE_LIMIT_WINDOW: int = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
     LOGIN_MAX_ATTEMPTS: int = int(os.getenv("LOGIN_MAX_ATTEMPTS", "5"))
     LOGIN_LOCKOUT_MINUTES: int = int(os.getenv("LOGIN_LOCKOUT_MINUTES", "15"))
+
+    # DeepSeek AI
+    DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
+    DEEPSEEK_BASE_URL: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+    DEEPSEEK_MODEL: str = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro")
 
     # Misc
     SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-key-change")

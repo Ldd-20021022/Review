@@ -1,7 +1,9 @@
 import { reactive } from 'vue'
 import { login as loginApi, getMe } from '../api/auth.js'
+import { post } from '../api/client.js'
 
-// Plain reactive store (no Pinia dependency)
+// Auth store: httpOnly cookie is the primary auth mechanism.
+// localStorage token is kept as a fallback indicator for the router.
 const state = reactive({
   user: null,
   token: localStorage.getItem('token') || '',
@@ -15,6 +17,7 @@ export const useAuthStore = () => ({
   async loginAction(phone, password) {
     const res = await loginApi(phone, password)
     state.token = res.access_token
+    // Store in localStorage for router guard fallback (cookie is primary auth)
     localStorage.setItem('token', state.token)
     state.user = res.user
     localStorage.setItem('user', JSON.stringify(res.user))
@@ -34,7 +37,9 @@ export const useAuthStore = () => ({
     }
   },
 
-  logout() {
+  async logout() {
+    // Clear httpOnly cookie via backend
+    try { await post('/api/auth/logout') } catch (_) { /* ignore */ }
     state.token = ''
     state.user = null
     localStorage.removeItem('token')

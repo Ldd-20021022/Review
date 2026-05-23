@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,7 @@ from ..models.tenant import Tenant
 from ..schemas.auth import LoginRequest, LoginResponse, UserInfo
 from ..utils.security import verify_password, create_access_token, hash_password
 from ..middleware.tenant import get_current_user
+from ..config import settings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -15,12 +17,12 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 @router.post("/login", response_model=LoginResponse)
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     from ..middleware.security import check_login_lockout, record_login_failure, record_login_success
-    check_login_lockout(req.phone)
+    check_login_lockout(req.phone, db)
     user = db.query(User).filter(User.phone == req.phone).first()
     if not user or not verify_password(req.password, user.password_hash):
-        record_login_failure(req.phone)
+        record_login_failure(req.phone, db)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="账号或密码错误")
-    record_login_success(req.phone)
+    record_login_success(req.phone, db)
 
     # Pick the first tenant as active context (platform admin can have none)
     first_ut = (
@@ -44,7 +46,17 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         "dept_id": first_ut.dept_id if first_ut else None,
     }
 
-    return LoginResponse(access_token=token, user=user_info)
+    resp = JSONResponse(content={"access_token": token, "user": user_info})
+    resp.set_cookie(
+        key="token",
+        value=token,
+        httponly=True,
+        secure=not settings.DEBUG,  # Secure in production (HTTPS only)
+        samesite="strict",
+        max_age=settings.JWT_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    return resp
 
 
 @router.get("/me", response_model=UserInfo)
@@ -106,3 +118,11 @@ def change_password(
     user.password_hash = hash_password(body.new_password)
     db.commit()
     return {"ok": True}
+
+
+@router.post("/logout")
+def logout():
+    """Clear the auth cookie."""
+    resp = JSONResponse(content={"ok": True})
+    resp.delete_cookie("token", path="/")
+    return resp

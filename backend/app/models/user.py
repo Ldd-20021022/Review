@@ -15,6 +15,7 @@ class User(Base):
     phone: Mapped[str] = mapped_column(String(20), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     name: Mapped[str] = mapped_column(String(100))
+    email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
